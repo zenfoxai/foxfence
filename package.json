@@ -1,0 +1,22 @@
+{
+  "name": "foxfence",
+  "version": "0.1.0-dev",
+  "description": "Model reliability & safety module for agents — OpenAI-compatible proxy with tool-calling shim and inline safety detectors",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "start": "bun run src/main.ts",
+    "dev": "bun --watch run src/main.ts",
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit",
+    "build": "bun build --compile --outfile dist/foxfence src/main.ts"
+  },
+  "dependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.0",
+    "openai": "^6.0.0",
+    "typescript": "^5.9.0"
+  }
+}

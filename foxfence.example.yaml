@@ -1,0 +1,24 @@
+# foxfence configuration — phase 1 (transparent proxy)
+# Copy to foxfence.yaml and adjust. Spec: SPEC-architecture.md §7.
+
+listen: 127.0.0.1:4100
+
+# Keys accepted on the agent side. Empty or absent = no auth required.
+# api_keys: [ "${FOXFENCE_KEY}" ]
+
+upstreams:
+  - name: local-ollama
+    base_url: http://localhost:11434/v1
+  # - name: openrouter
+  #   base_url: https://openrouter.ai/api/v1
+  #   api_key: "${OPENROUTER_KEY}"
+
+models:
+  # name exposed to the agent → upstream + real model.
+  - expose: qwen-tools
+    upstream: local-ollama
+    model: qwen2.5:7b-instruct
+    # Later phases (accepted, currently ignored):
+    # shim: auto
+    # probe: lazy
+    # repair: { max_attempts: 2 }
