@@ -7,7 +7,7 @@ model, so its own attack surface is its first quality criterion (§2.5, §10).
 
 **Please do not open a public issue for security vulnerabilities.**
 
-Email **security@qoddi.com** with:
+Email **security@zenfox.ai** with:
 
 - a description of the issue and its impact,
 - steps to reproduce (a minimal `foxfence.yaml` + request is ideal),

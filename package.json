@@ -1,8 +1,13 @@
 {
   "name": "foxfence",
-  "version": "0.1.0-dev",
+  "version": "0.1.0",
   "description": "Model reliability & safety module for agents — OpenAI-compatible proxy with tool-calling shim and inline safety detectors",
   "license": "Apache-2.0",
+  "author": "Alexandre Gonzales <alex@zenfox.ai>",
+  "contributors": ["Zenfox AI LTD"],
+  "homepage": "https://github.com/zenfoxai/foxfence#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/zenfoxai/foxfence.git" },
+  "bugs": { "url": "https://github.com/zenfoxai/foxfence/issues" },
   "type": "module",
   "scripts": {
     "start": "bun run src/main.ts",

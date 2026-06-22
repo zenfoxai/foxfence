@@ -1,10 +1,28 @@
 import { loadConfig } from "./config/load.ts";
 import { createServer } from "./server.ts";
+import pkg from "../package.json" with { type: "json" };
 
-function configPath(argv: string[]): string {
-  const flag = argv.findIndex((a) => a === "--config" || a === "-c");
+const argv = process.argv.slice(2);
+
+if (argv.includes("--version") || argv.includes("-v")) {
+  console.log(`foxfence ${pkg.version}`);
+  process.exit(0);
+}
+if (argv.includes("--help") || argv.includes("-h")) {
+  console.log(
+    `foxfence ${pkg.version} — model reliability & safety module for agents\n\n` +
+      `Usage: foxfence [--config <path>]\n\n` +
+      `  -c, --config <path>   config file (default: ./foxfence.yaml)\n` +
+      `  -v, --version         print version and exit\n` +
+      `  -h, --help            print this help and exit`,
+  );
+  process.exit(0);
+}
+
+function configPath(args: string[]): string {
+  const flag = args.findIndex((a) => a === "--config" || a === "-c");
   if (flag !== -1) {
-    const value = argv[flag + 1];
+    const value = args[flag + 1];
     if (!value) {
       console.error("error: --config requires a path");
       process.exit(2);
@@ -14,7 +32,7 @@ function configPath(argv: string[]): string {
   return "./foxfence.yaml";
 }
 
-const path = configPath(process.argv.slice(2));
+const path = configPath(argv);
 
 try {
   const config = await loadConfig(path);

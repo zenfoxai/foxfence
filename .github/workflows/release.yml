@@ -44,6 +44,19 @@ jobs:
           sha256sum foxfence-* > SHA256SUMS
           cat SHA256SUMS
 
+      - name: Render Homebrew formula
+        run: |
+          cd dist
+          sha() { sha256sum "$1" | cut -d' ' -f1; }
+          sed \
+            -e "s/__VERSION__/${GITHUB_REF_NAME#v}/" \
+            -e "s/__SHA_DARWIN_ARM64__/$(sha foxfence-darwin-arm64)/" \
+            -e "s/__SHA_DARWIN_X64__/$(sha foxfence-darwin-x64)/" \
+            -e "s/__SHA_LINUX_ARM64__/$(sha foxfence-linux-arm64)/" \
+            -e "s/__SHA_LINUX_X64__/$(sha foxfence-linux-x64)/" \
+            ../packaging/homebrew/foxfence.rb > foxfence.rb
+          echo "rendered foxfence.rb:" && cat foxfence.rb
+
       - name: Install cosign
         uses: sigstore/cosign-installer@v3
 
@@ -63,6 +76,7 @@ jobs:
           files: |
             dist/foxfence-*
             dist/SHA256SUMS
+            dist/foxfence.rb
             dist/*.sig
             dist/*.pem
           body: |
