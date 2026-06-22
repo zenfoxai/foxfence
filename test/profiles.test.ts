@@ -129,14 +129,21 @@ describe("registry loading and resolution", () => {
 });
 
 describe("bundled profile registry", () => {
-  test("ships a valid Cohere Command A+ profile pinning native tool calling", () => {
+  test("ships a Cohere Command A+ profile that does NOT pin native tool calling", () => {
+    // Validated against cohere/command-a via OpenRouter: it does not emit
+    // OpenAI-format native tool_calls, so pinning native would force 0%. The
+    // profile is informational; tool calling is left to `shim: auto`.
     const reg = loadProfileRegistry("./profiles");
     const cmd = reg.get("command-a-plus");
     expect(cmd).toBeDefined();
-    expect(cmd!.capabilities?.toolCalling).toBe("native");
+    expect(cmd!.capabilities?.toolCalling).toBeUndefined();
+    expect(cmd!.pinStrategy).toBeUndefined();
+    expect(cmd!.contextWindow).toBe(256000);
   });
 
-  test("a route referencing command-a-plus selects native without probing", async () => {
+  test("a route referencing command-a-plus still probes (auto), not forced native", async () => {
+    // the model is a native-tool-caller in this fake, so the probe classifies
+    // native — but the point is the probe RAN (the profile didn't pin it).
     upstream.handler = nativeHandler;
     const config = ConfigSchema.parse({
       listen: "127.0.0.1:0",
@@ -153,10 +160,9 @@ describe("bundled profile registry", () => {
         messages: [{ role: "user", content: "weather?" }],
         tools: [WEATHER_TOOL],
       });
-      // declared native → no fox_ping probe was sent
-      expect(upstream.requests.slice(before).some((r) => JSON.stringify(r.body).includes("fox_ping"))).toBe(false);
-      expect((res as any).foxfence.shim.strategy).toBe("native");
-      expect((res as any).foxfence.shim.source).toBe("profile");
+      // a fox_ping probe WAS sent (capabilities not declared by the profile)
+      expect(upstream.requests.slice(before).some((r) => JSON.stringify(r.body).includes("fox_ping"))).toBe(true);
+      expect((res as any).foxfence.shim.source).toBe("probe");
     } finally {
       server.stop(true);
     }

@@ -1,16 +1,15 @@
-# Cohere Command A family — flagship agentic / tool-use models. Native
-# (OpenAI-style) function calling and a normal system role when served through
-# an OpenAI-compatible endpoint (Cohere's Compatibility API, vLLM, OpenRouter).
-# Pinning `native` lets you skip the probe for deterministic production
-# behavior. Context window is the Command A family's documented 256K — verify
-# for your exact build/endpoint.
+# Cohere Command A family — flagship agentic / tool-use models.
+#
+# IMPORTANT (measured 2026-06): Command A has native tool calling in Cohere's
+# own API, but over OpenAI-COMPATIBLE endpoints (e.g. OpenRouter) it does NOT
+# reliably emit OpenAI-format `tool_calls` — called directly it scored 0% on
+# our tool-calling eval, while `shim: auto` probed, fell back to json-prompted,
+# and recovered it to 100%. So we deliberately DO NOT pin `toolCalling: native`
+# here: that would force native passthrough and break tool calling on those
+# endpoints. Leave the route on `shim: auto` and let the probe decide per
+# deployment. (If you serve Command A via Cohere's native API behind a shim
+# that does translate tools, you may pin native yourself after verifying.)
 - id: command-a-plus
-  capabilities:
-    toolCalling: native
-    parallelToolCalls: true
   contextWindow: 256000
 - id: command-a
-  capabilities:
-    toolCalling: native
-    parallelToolCalls: true
   contextWindow: 256000

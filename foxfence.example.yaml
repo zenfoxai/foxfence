@@ -67,3 +67,8 @@ audit:
   # Local JSONL audit trail. Omit this section to disable. No telemetry, ever.
   file: ./foxfence-audit.jsonl
   include_content: false           # metadata only by default
+
+metrics:
+  # Opt-in Prometheus endpoint at GET /metrics (unauthenticated like /healthz —
+  # network-restrict it). Default off → /metrics returns 404.
+  enabled: false

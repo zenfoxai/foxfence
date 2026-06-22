@@ -84,6 +84,10 @@ export const AuditConfigSchema = z.looseObject({
   include_content: z.boolean().default(false),
 });
 
+export const MetricsConfigSchema = z.looseObject({
+  enabled: z.boolean().default(false),
+});
+
 export const ConfigSchema = z
   .looseObject({
     listen: z.string().default("127.0.0.1:4100"),
@@ -92,6 +96,7 @@ export const ConfigSchema = z
     models: z.array(ModelRouteSchema).min(1),
     security: SecuritySchema.optional(),
     audit: AuditConfigSchema.optional(),
+    metrics: MetricsConfigSchema.optional(),
     // Directory of community model profiles (YAML); resolved lazily, only
     // when a route references a profile by id.
     profiles_dir: z.string().min(1).optional(),

@@ -2,6 +2,7 @@ import type { ModelRoute, Upstream } from "./config/schema.ts";
 import type { Detector, Phase, RequestContext, Verdict } from "./security/detector.ts";
 import { createContext } from "./security/detector.ts";
 import { AuditLog, type AuditVerdict } from "./audit.ts";
+import type { Metrics } from "./metrics.ts";
 import { errors } from "./pivot/errors.ts";
 import { callUpstream, relayResponse, UpstreamError } from "./upstream/client.ts";
 import { CapabilityStore, chooseStrategy, type StrategyChoice } from "./shim/probe.ts";
@@ -14,6 +15,7 @@ export interface PipelineOptions {
   audit: AuditLog | null;
   auditIncludeContent: boolean;
   capabilities: CapabilityStore;
+  metrics: Metrics | null;
 }
 
 /** A mutable reference to one text segment inside the request/response. */
@@ -639,7 +641,7 @@ export async function handleChatCompletion(
     blocked: boolean,
     extra: Record<string, unknown> = {},
   ) => {
-    opts.audit?.write({
+    const record = {
       ts: new Date().toISOString(),
       id: ctx.id,
       model: route.expose,
@@ -655,7 +657,9 @@ export async function handleChatCompletion(
       ...(shimInfo ? { shim: shimInfo } : {}),
       ...(opts.auditIncludeContent ? { content: { request: body.messages, response: null } } : {}),
       ...extra,
-    });
+    };
+    opts.audit?.write(record);
+    opts.metrics?.record(record);
   };
 
   // ── Pipeline IN ────────────────────────────────────────────────

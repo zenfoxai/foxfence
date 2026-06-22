@@ -1,0 +1,79 @@
+name: release
+
+# Builds signed, multi-platform single binaries on a version tag (§10).
+# Signing is Sigstore keyless via the workflow's OIDC token — no stored keys.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write # create the release + upload assets
+  id-token: write # OIDC token for cosign keyless signing
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+
+      - name: Verify before release
+        run: |
+          bun run typecheck
+          bun test
+          bun audit
+
+      - name: Cross-compile all targets
+        run: |
+          mkdir -p dist
+          for target in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do
+            ext=""
+            [ "$target" = "bun-windows-x64" ] && ext=".exe"
+            out="dist/foxfence-${target#bun-}${ext}"
+            echo "building $out"
+            bun build --compile --target="$target" --outfile "$out" src/main.ts
+          done
+
+      - name: Checksums
+        run: |
+          cd dist
+          sha256sum foxfence-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign artifacts (keyless)
+        run: |
+          cd dist
+          for f in foxfence-* SHA256SUMS; do
+            cosign sign-blob --yes \
+              --output-signature "$f.sig" \
+              --output-certificate "$f.pem" \
+              "$f"
+          done
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/foxfence-*
+            dist/SHA256SUMS
+            dist/*.sig
+            dist/*.pem
+          body: |
+            Signed multi-platform binaries. Verify a download with:
+
+            ```sh
+            sha256sum -c SHA256SUMS --ignore-missing
+            cosign verify-blob \
+              --certificate foxfence-linux-x64.pem \
+              --signature foxfence-linux-x64.sig \
+              --certificate-identity-regexp 'https://github.com/.*/foxfence/.github/workflows/release.yml@.*' \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+              foxfence-linux-x64
+            ```

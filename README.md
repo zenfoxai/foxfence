@@ -5,8 +5,10 @@ sits between any agent and any model, making cheap models more capable
 (tool-calling shim) and safer (inline detectors). See
 [SPEC-architecture.md](./SPEC-architecture.md) for the full design.
 
-**Status: v0.2 complete; v1.0 in progress.** The OpenAI SDK works unmodified
-against foxfence, streaming included. Requests and responses flow through
+**Status: v1.0.** Chat Completions + Responses APIs, all four shim strategies,
+the full safety pipeline, incremental streaming, Prometheus metrics, model
+profiles, and signed multi-platform release binaries. The OpenAI SDK works
+unmodified against foxfence, streaming included. Requests and responses flow through
 inline safety detectors (with optional external classifiers), tool calling
 works even for models with no native support (`native` / `json-prompted` /
 `constrained` / `react` strategies + a bounded repair loop), a declarative
@@ -32,7 +34,13 @@ names from your config.
 - `POST /v1/chat/completions` — transparent passthrough, stream and
   non-stream. The request `model` is rewritten from the exposed name to the
   upstream's real model id; everything else is forwarded untouched.
+- `POST /v1/responses` — the OpenAI Responses API, translated to the chat
+  pivot so every shim and safety feature applies unchanged (non-streaming;
+  streaming on this surface is rejected with a clear error for now).
 - `GET /v1/models` — lists exposed models.
+- `GET /metrics` — opt-in Prometheus scrape (`metrics.enabled: true`): requests,
+  blocks, repairs, and detector verdicts per model, plus overhead/upstream
+  latency histograms. Unauthenticated like `/healthz` — network-restrict it.
 - `GET /healthz` — liveness (no auth).
 - Agent-side API keys (`api_keys`), upstream-side key injection (the agent's
   key is never forwarded upstream).
@@ -165,18 +173,23 @@ See the streaming bullet above for the two deliberate tradeoffs.
 
 ## Eval — the with/without-foxfence table
 
-The project's headline claim (§11.2): a cheap model becomes reliable at tool
+The project's headline claim (§11.2): a model becomes more reliable at tool
 calling behind foxfence. `bun run eval` measures it and prints a table.
 
 ```sh
-bun run eval                                   # bundled simulated weak model
-bun run eval --endpoint http://localhost:11434/v1 --model qwen2.5:7b-instruct
-bun run eval --out eval/results.md             # write the table to a file
+bun run eval                                              # bundled simulator
+bun run eval --endpoint <url> --model <name> --key <key>  # a real model
+bun run eval --endpoint <url> --model <name> --shim json-prompted  # force the shim
 ```
 
-The bundled run uses a deterministic simulated model with *no native tool
-calling*, so it scores 0% called directly and ~86% behind the `json-prompted`
-shim — see [`eval/results.md`](./eval/results.md). The corpus lives in
+**Real-model results** ([`eval/results.md`](./eval/results.md), 7 models across
+OpenRouter + Fireworks): foxfence took **Cohere Command A from 0% → 100%** (it
+emits no native tool calls over an OpenAI-compatible endpoint — the auto-probe
+shimmed it), improved mid-tier native models (Qwen2.5-7B 83→90%, Llama-3.1-8B
+86→100%), and was **transparent on frontier models** (GPT-4o, Kimi K2.6,
+GLM-5.2, gpt-oss-120b all 100→100% with zero repairs — it never degrades a model
+that already works). Forcing the prompted shim even beat Qwen's own native path.
+The corpus lives in
 [`eval/cases/`](./eval/cases/) (validated at load: every expected call must
 conform to its tool's JSON Schema); the scorer is in `eval/score.ts`. Run real
 models with `--endpoint` and contribute their tables.
@@ -201,3 +214,15 @@ bun run typecheck   # tsc --noEmit
 bun run eval        # tool-calling reliability table
 bun run build       # single binary → dist/foxfence
 ```
+
+CI (`.github/workflows/ci.yml`) runs typecheck, tests, and `bun audit` on every
+PR; tagged releases (`.github/workflows/release.yml`) cross-compile signed,
+checksummed binaries for Linux/macOS/Windows (Sigstore keyless).
+
+## Contributing & security
+
+- [`CONTRIBUTING.md`](./CONTRIBUTING.md) — dev setup and how to contribute a
+  model [profile](./profiles/) (the most welcome kind of change).
+- [`SECURITY.md`](./SECURITY.md) — responsible disclosure and the security
+  posture (zero telemetry, egress allowlist, signed releases).
+- [`LICENSE`](./LICENSE) — Apache 2.0.

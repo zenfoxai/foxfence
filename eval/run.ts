@@ -52,6 +52,8 @@ export interface EvalOptions {
   model?: string;
   apiKey?: string;
   casesDir?: string;
+  /** Force the foxfence shim strategy (auto | native | json-prompted | …). */
+  shim?: string;
 }
 
 export interface EvalResult {
@@ -79,7 +81,7 @@ export async function runEval(opts: EvalOptions = {}): Promise<EvalResult> {
   if (opts.endpoint) {
     upstreamBaseUrl = opts.endpoint;
     upstreamModel = opts.model ?? "default";
-    modelLabel = `${upstreamModel} @ ${opts.endpoint}`;
+    modelLabel = `${upstreamModel} @ ${opts.endpoint}${opts.shim ? ` (foxfence shim: ${opts.shim})` : ""}`;
     directTarget = { label: "direct", baseUrl: opts.endpoint, model: upstreamModel, apiKey: opts.apiKey };
   } else {
     sim = startSimModel(cases);
@@ -92,7 +94,16 @@ export async function runEval(opts: EvalOptions = {}): Promise<EvalResult> {
   const config = ConfigSchema.parse({
     listen: "127.0.0.1:0",
     upstreams: [{ name: "upstream", base_url: upstreamBaseUrl, ...(opts.apiKey ? { api_key: opts.apiKey } : {}) }],
-    models: [{ expose: "foxfence-shim", upstream: "upstream", model: upstreamModel }],
+    models: [
+      {
+        expose: "foxfence-shim",
+        upstream: "upstream",
+        model: upstreamModel,
+        // Force a strategy to measure the capability shim against a model that
+        // already does native tools; omit (default auto) for the realistic path.
+        ...(opts.shim ? { shim: opts.shim } : {}),
+      },
+    ],
   });
   const foxfence = createServer(config);
   const foxfenceTarget: Target = {
@@ -141,6 +152,7 @@ function parseArgs(argv: string[]): EvalOptions & { out?: string; json?: boolean
     if (a === "--endpoint") opts.endpoint = argv[++i];
     else if (a === "--model") opts.model = argv[++i];
     else if (a === "--key") opts.apiKey = argv[++i];
+    else if (a === "--shim") opts.shim = argv[++i];
     else if (a === "--out") opts.out = argv[++i];
     else if (a === "--json") opts.json = true;
   }

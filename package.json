@@ -10,7 +10,8 @@
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
     "eval": "bun run eval/run.ts",
-    "build": "bun build --compile --outfile dist/foxfence src/main.ts"
+    "build": "bun build --compile --outfile dist/foxfence src/main.ts",
+    "build:all": "for t in bun-linux-x64 bun-linux-arm64 bun-darwin-x64 bun-darwin-arm64 bun-windows-x64; do bun build --compile --target=$t --outfile dist/foxfence-${t#bun-} src/main.ts; done"
   },
   "dependencies": {
     "zod": "^4.0.0"

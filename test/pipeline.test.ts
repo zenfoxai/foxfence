@@ -229,7 +229,7 @@ describe("fail-closed on detector errors", () => {
     shim: "auto" as const,
     probe: "lazy" as const,
   };
-  const baseOpts = { audit: null, auditIncludeContent: false, capabilities: new CapabilityStore() };
+  const baseOpts = { audit: null, auditIncludeContent: false, capabilities: new CapabilityStore(), metrics: null };
 
   test("on_detector_error block → request is blocked", async () => {
     const res = await handleChatCompletion(

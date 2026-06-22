@@ -1,26 +1,72 @@
 # Eval results
 
 Tool-calling reliability **with and without foxfence** (§11.2). Regenerate with
-`bun run eval` (bundled simulated model) or `bun run eval --endpoint <url> --model <name>`
-against a real OpenAI-compatible server.
+`bun run eval` (bundled simulator) or
+`bun run eval --endpoint <url> --model <name> --key <key>` against a real
+OpenAI-compatible server. Add `--shim json-prompted` to force the capability
+shim instead of the model's native tool calling.
 
-Model under test: simulated weak model (no native tool calling)
-Cases: 34
+## Real models (34-case corpus, 2026-06)
 
-| mode | valid-call rate | exact-match rate | tool-call cases | no-call cases | repairs |
-|---|---|---|---|---|---|
-| direct | 15% | 15% | 0% (29) | 100% (5) | 0 |
-| foxfence | 88% | 88% | 86% (29) | 100% (5) | 3 |
+Headline metric is the **valid tool-call rate** (a schema-valid call to the
+right tool; or correctly no call). `repairs` is foxfence's bounded repair loop
+firing.
 
-**Reading the table.** The bundled model has *no native tool calling*, so called
-directly it produces 0% valid tool calls (it answers in text); it still scores
-100% on the no-call cases because answering in text is the right move there.
-Behind foxfence, the `json-prompted` shim parses those text replies into valid
-OpenAI tool calls and the repair loop fixes the malformed ones — 86% of tool
-cases recovered, no-call cases untouched, no false tool calls introduced. The
-remaining ~14% are deliberately unrecoverable cases (the model emits no parseable
-call even after a repair), so the harness can never report a fake 100%.
+| model (via) | direct | foxfence (auto) | repairs |
+|---|---|---|---|
+| **cohere/command-a** (OpenRouter) | **0%** ¹ | **100%** | 2 |
+| **qwen2.5-7b-instruct** (OpenRouter) | 83% | **90%** ² | 5 |
+| **llama-3.1-8b-instruct** (OpenRouter) | 86% | **100%** | 3 |
+| **gpt-4o** (OpenRouter) | 100% | 100% | 0 |
+| **kimi-k2.6** (Fireworks) | 100% | 100% | 0 |
+| **glm-5.2** (Fireworks) | 100% | 100% | 0 |
+| **gpt-oss-120b** (Fireworks, reasoning) | 100% | 100% | 0 |
 
-This is a *format-recovery* demonstration on a deterministic simulator. Numbers
-for real models (Qwen, Llama, Mistral, …) come from running `bun run eval
---endpoint …` against them; contribute the resulting table here.
+*(tool-call-case rate; the no-call cases sit at 100% for foxfence in every run —
+it never introduced a false tool call, and on Llama it fixed a spurious direct
+call, 80→100.)*
+
+¹ Cohere Command A emits **no OpenAI-format native tool calls** over an
+OpenAI-compatible endpoint, so called directly it scores 0%. foxfence's
+auto-probe detected that, fell back to `json-prompted`, and reached 100%. This
+is why `profiles/cohere.yaml` does **not** pin `toolCalling: native`.
+
+² On Qwen, the provider returned malformed native tool calls twice; foxfence's
+runtime native→json-prompted downgrade fired and the repair loop recovered the
+rest.
+
+### Forcing the prompted shim (`--shim json-prompted`)
+
+Driving a model that *has* native tools entirely through the prompted JSON
+protocol + schema validation:
+
+| model | direct (native) | foxfence (prompted) |
+|---|---|---|
+| qwen2.5-7b-instruct | 76% | **100%** |
+| gpt-4o | 100% | 100% |
+
+The prompted shim matches native on GPT-4o and **beats** Qwen's own native path —
+the prompted protocol with validation is at least as reliable as native tool
+calling.
+
+## What this validates
+
+- **It rescues models the endpoint can't tool-call** (Cohere: 0→100) — the core
+  capability-shim claim, on a real flagship.
+- **It improves mid-tier native models** (Qwen 83→90, Llama 86→100) via the
+  runtime downgrade + repair loop.
+- **It is transparent on frontier models** (GPT-4o, Kimi K2.6, GLM-5.2,
+  gpt-oss-120b all 100→100, 0 repairs) — principle #4: never degrade a model
+  that already works. For these, foxfence's value is the *safety layer* (secrets,
+  PII, tool-policy) plus repair-loop insurance, not raw tool-call capability.
+
+**Caveat:** numbers are at provider-default temperature, so `direct` and
+`foxfence` are independent samples — small exact-match-rate wobble between them
+(e.g. gpt-oss foxfence 97% vs direct 94%) is sampling noise, not signal. The
+valid tool-call rate is the stable metric. Regenerate to refresh.
+
+## Bundled simulator (`bun run eval`, no endpoint)
+
+A deterministic model with *no* native tool calling, for a self-contained CI
+run: 0% called directly, ~86% behind the `json-prompted` shim. See the harness
+in `eval/`.

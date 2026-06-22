@@ -435,7 +435,7 @@ describe("fail-closed on a tool-policy detector error", () => {
       onDetectorError,
       audit: null,
       auditIncludeContent: false,
-      capabilities: new CapabilityStore(),
+      capabilities: new CapabilityStore(), metrics: null,
     };
   }
 

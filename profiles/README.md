@@ -42,9 +42,9 @@ Precedence when selecting a strategy: an explicit route `shim:` wins, then
 
 | id | what it records |
 |---|---|
-| `command-a-plus`, `command-a` | Cohere Command A family — native tool calling, parallel calls, 256K context |
-| `qwen2.5-instruct` | native tool calling |
-| `llama-3.1-instruct`, `llama-3.3-instruct` | native tool calling |
+| `qwen2.5-instruct` | native tool calling (verified via OpenRouter) |
+| `llama-3.1-instruct`, `llama-3.3-instruct` | native tool calling (3.1 verified via OpenRouter) |
+| `command-a-plus`, `command-a` | Cohere Command A — 256K context; **does NOT** declare native (it doesn't emit OpenAI-format tool calls over OpenAI-compatible proxies — leave on `shim: auto`) |
 | `gemma-2`, `gemma-3` | `no-system-role` chat-template quirk |
 
 ## Contributing
