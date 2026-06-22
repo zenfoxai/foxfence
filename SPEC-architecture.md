@@ -1,9 +1,10 @@
 # Architecture Spec — Model Reliability & Safety Module for Agents
 
-**Status**: Draft v0.2 — starting document for the repo
+**Status**: Architecture & design reference (implemented — see README.md for
+current usage)
 **License**: Apache 2.0
 **Stack**: TypeScript / Bun (single binary via `bun build --compile`)
-**Name**: `foxfence` — published by Zenfox AI
+**Name**: `foxfence` — published by Zenfox AI LTD
 
 ---
 
@@ -472,6 +473,6 @@ foxfence/
 
 ---
 
-*Document generated 2026-06-10. Suggested next step: validate the §4
-interfaces, then scaffold the repo (server.ts + pipeline + json-prompted
-strategy) for a first real test against OpenClaw + Ollama.*
+*This is the original design document; the implementation realizes it in full
+(with some deliberate, documented refinements noted in the README). See the
+README for installation and current behavior.*

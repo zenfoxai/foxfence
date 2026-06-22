@@ -5,10 +5,11 @@ sits between any agent and any model, making cheap models more capable
 (tool-calling shim) and safer (inline detectors). See
 [SPEC-architecture.md](./SPEC-architecture.md) for the full design.
 
-**Status: v1.0.** Chat Completions + Responses APIs, all four shim strategies,
-the full safety pipeline, incremental streaming, Prometheus metrics, model
-profiles, and signed multi-platform release binaries. The OpenAI SDK works
-unmodified against foxfence, streaming included. Requests and responses flow through
+Feature-complete and validated against real models. foxfence speaks the Chat
+Completions and Responses APIs, ships all four shim strategies, the full safety
+pipeline, incremental streaming, Prometheus metrics, model profiles, and signed
+multi-platform binaries. The OpenAI SDK works unmodified against it, streaming
+included. Requests and responses flow through
 inline safety detectors (with optional external classifiers), tool calling
 works even for models with no native support (`native` / `json-prompted` /
 `constrained` / `react` strategies + a bounded repair loop), a declarative
@@ -47,7 +48,7 @@ names from your config.
 - Errors in standard OpenAI wire format.
 - Single-binary build: `bun run build` → `dist/foxfence`.
 
-### Safety pipeline (phase 2)
+### Safety pipeline
 
 - `secrets` detector — high-precision patterns (AWS/GCP/GitHub/Slack/Stripe
   keys, `sk-*` API keys behind an entropy gate, PEM private keys, connection
@@ -56,7 +57,7 @@ names from your config.
   restore); new secrets appearing in model output are permanently redacted.
 - `pii-basic` detector — emails, phone numbers, Luhn-validated cards.
   Default `flag` (audit-only, traffic untouched).
-- **Remote detectors** (v0.2, §5.2) — give any detector a `remote:` classifier
+- **Remote detectors** (§5.2) — give any detector a `remote:` classifier
   URL and foxfence POSTs each segment to it, mapping the reply to a verdict;
   this is how `prompt-injection` is enabled (LLM Guard, OpenGuardrails, or an
   in-house model behind a small HTTP server). Optional `roles:` targets e.g.
@@ -74,7 +75,7 @@ names from your config.
   responses; standard OpenAI fields are never altered (except `model`, which
   is normalized back to the exposed name).
 
-### Tool-calling shim (phase 3)
+### Tool-calling shim
 
 - **`auto` mode (default, zero config)** — on the first tools request per
   model, foxfence sends a canonical mini tool-call probe and classifies the
@@ -85,16 +86,16 @@ names from your config.
   block mandating a JSON protocol; conversation history with `tool` messages
   is rewritten for models that reject them; output parsing is tolerant
   (fences, prose around the object, arguments-as-string).
-- **`constrained` strategy** (v0.2) — when an upstream declares a
+- **`constrained` strategy** — when an upstream declares a
   constrained-decoding mechanism (`constrained: response_format | guided_json`
   for OpenAI/vLLM `json_schema` or vLLM's extra field), foxfence sends a
   per-tool union JSON Schema so the server can only emit a well-formed call.
   `auto` prefers it over `json-prompted` whenever the upstream supports it.
-- **`react` strategy** (v1.0) — a `Thought / Action / Action Input` format for
+- **`react` strategy** — a `Thought / Action / Action Input` format for
   old or very small models that can't reliably hold JSON. Parsing is forgiving
   (a bare `Action Input: Paris` maps onto a one-argument tool). Opt-in only via
   `shim: react` or a profile `pinStrategy: react` — `auto` never selects it.
-- **Model profiles** (v0.2, [`profiles/`](./profiles/)) — pin a model's
+- **Model profiles** ([`profiles/`](./profiles/)) — pin a model's
   capabilities/strategy or record a chat-template quirk (e.g. Gemma's
   `no-system-role`) the probe can't see. Reference by id (`profile: gemma-2`)
   or inline. Precedence: route `shim:` > `pinStrategy` > declared
@@ -111,7 +112,7 @@ names from your config.
 - **Pinning** — `shim: native` or `shim: json-prompted` skips probing for
   deterministic production behavior; `probe: startup` probes eagerly,
   `probe: off` assumes native.
-- **Incremental streaming** (v1.0, §6.5) — native and tool-free streams go out
+- **Incremental streaming** (§6.5) — native and tool-free streams go out
   token-by-token: content is sanitized on the fly (mask & restore + secret
   redaction that never leaks a partial secret across chunks), and a native tool
   call is assembled, validated, and run through tool-policy before being
@@ -128,7 +129,7 @@ names from your config.
   surfaced as `foxfence.stream_error` on the final chunk rather than passed off
   as a clean completion.
 
-### Tool-call policy (phase 4)
+### Tool-call policy
 
 The safety differentiator (§5.3): a declarative allow/deny policy enforced on
 tool calls *after* parsing/repair, so it works even for models with no native

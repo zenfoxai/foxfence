@@ -1,5 +1,5 @@
-# foxfence configuration — phase 4 (proxy + safety pipeline + shim + tool policy)
-# Copy to foxfence.yaml and adjust. Spec: SPEC-architecture.md §7.
+# foxfence configuration — copy to foxfence.yaml and adjust.
+# Full reference: README.md and SPEC-architecture.md §7.
 
 listen: 127.0.0.1:4100
 
