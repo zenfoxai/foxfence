@@ -1,0 +1,823 @@
+[
+  {
+    "id": "weather-current-city",
+    "category": "weather",
+    "description": "User asks for current weather in a clearly named city; the single weather tool should be called with that city.",
+    "user": "What's the weather like in Tokyo right now?",
+    "tools": [
+      {
+        "name": "get_current_weather",
+        "description": "Get the current weather conditions for a given city.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "The name of the city to get weather for."
+            },
+            "units": {
+              "type": "string",
+              "enum": [
+                "celsius",
+                "fahrenheit"
+              ],
+              "description": "Temperature units to report."
+            }
+          },
+          "required": [
+            "city"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "get_current_weather",
+      "args": {
+        "city": "Tokyo"
+      }
+    }
+  },
+  {
+    "id": "timer-set-minutes",
+    "category": "set_timer",
+    "description": "User wants a timer set for a stated number of minutes; the set_timer tool should be called with the duration.",
+    "user": "Set a timer for 10 minutes.",
+    "tools": [
+      {
+        "name": "set_timer",
+        "description": "Start a countdown timer for a given duration.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "duration_minutes": {
+              "type": "integer",
+              "description": "Length of the timer in minutes."
+            },
+            "label": {
+              "type": "string",
+              "description": "Optional label for the timer."
+            }
+          },
+          "required": [
+            "duration_minutes"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "set_timer",
+      "args": {
+        "duration_minutes": 10
+      }
+    }
+  },
+  {
+    "id": "stock-price-ticker",
+    "category": "get_stock_price",
+    "description": "User asks for the current stock price of a company by ticker symbol; the price tool should be called with that symbol.",
+    "user": "What's the current stock price of AAPL?",
+    "tools": [
+      {
+        "name": "get_stock_price",
+        "description": "Look up the latest stock price for a ticker symbol.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "symbol": {
+              "type": "string",
+              "description": "The stock ticker symbol, e.g. AAPL."
+            }
+          },
+          "required": [
+            "symbol"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "get_stock_price",
+      "args": {
+        "symbol": "AAPL"
+      }
+    }
+  },
+  {
+    "id": "search-web-query",
+    "category": "search",
+    "description": "User asks to search the web for a clearly stated query; the search tool should be called with that query string.",
+    "user": "Search the web for the best espresso machines under $500.",
+    "tools": [
+      {
+        "name": "web_search",
+        "description": "Run a web search and return relevant results.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The search query text."
+            },
+            "max_results": {
+              "type": "integer",
+              "description": "Maximum number of results to return."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "web_search",
+      "args": {
+        "query": "best espresso machines under $500"
+      }
+    }
+  },
+  {
+    "id": "currency-convert-amount",
+    "category": "convert_currency",
+    "description": "User states an amount and two currencies to convert between; the converter tool should be called with the amount and both currency codes.",
+    "user": "Convert 100 USD to EUR.",
+    "tools": [
+      {
+        "name": "convert_currency",
+        "description": "Convert a monetary amount from one currency to another.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number",
+              "description": "The amount of money to convert."
+            },
+            "from_currency": {
+              "type": "string",
+              "description": "The source currency code, e.g. USD."
+            },
+            "to_currency": {
+              "type": "string",
+              "description": "The target currency code, e.g. EUR."
+            }
+          },
+          "required": [
+            "amount",
+            "from_currency",
+            "to_currency"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "convert_currency",
+      "args": {
+        "amount": 100,
+        "from_currency": "USD",
+        "to_currency": "EUR"
+      }
+    }
+  },
+  {
+    "id": "no-call-irrelevant-tool",
+    "category": "no_call",
+    "description": "User asks a general knowledge question about history; the only available tool (weather) is irrelevant, so the model should answer in plain text without calling it.",
+    "user": "Who painted the Mona Lisa?",
+    "tools": [
+      {
+        "name": "get_current_weather",
+        "description": "Get the current weather conditions for a given city.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "The name of the city to get weather for."
+            }
+          },
+          "required": [
+            "city"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "no_call"
+    }
+  },
+  {
+    "id": "enum-ticket-priority-high",
+    "category": "enum",
+    "description": "User says it's urgent and the production site is down, mapping the priority enum to 'high'.",
+    "user": "Open a support ticket titled 'Checkout page is down' and mark it as high priority since it's affecting all customers.",
+    "tools": [
+      {
+        "name": "create_support_ticket",
+        "description": "Create a new support ticket with a title and priority level.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "The title of the support ticket."
+            },
+            "priority": {
+              "type": "string",
+              "enum": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "description": "The priority level of the ticket."
+            }
+          },
+          "required": [
+            "title",
+            "priority"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "create_support_ticket",
+      "args": {
+        "title": "Checkout page is down",
+        "priority": "high"
+      }
+    }
+  },
+  {
+    "id": "string-create-file-path",
+    "category": "string",
+    "description": "Tests fidelity of an absolute file path argument with directories and extension preserved exactly.",
+    "user": "Create a new empty file at /home/dana/projects/web-app/src/components/Header.tsx for me.",
+    "tools": [
+      {
+        "name": "create_file",
+        "description": "Create a new empty file at the given filesystem path.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Absolute filesystem path of the file to create."
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "create_file",
+      "args": {
+        "path": "/home/dana/projects/web-app/src/components/Header.tsx"
+      }
+    }
+  },
+  {
+    "id": "string-bookmark-url",
+    "category": "string",
+    "description": "Tests fidelity of a URL with query string and a multi-word title containing punctuation.",
+    "user": "Bookmark the page https://news.example.com/articles?id=42&ref=home with the title \"Breaking: Q3 Earnings, Explained\".",
+    "tools": [
+      {
+        "name": "add_bookmark",
+        "description": "Save a bookmark with a URL and a display title.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The full URL to bookmark."
+            },
+            "title": {
+              "type": "string",
+              "description": "Display title for the bookmark."
+            }
+          },
+          "required": [
+            "url",
+            "title"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "add_bookmark",
+      "args": {
+        "url": "https://news.example.com/articles?id=42&ref=home",
+        "title": "Breaking: Q3 Earnings, Explained"
+      }
+    }
+  },
+  {
+    "id": "string-search-quoted-phrase",
+    "category": "string",
+    "description": "Tests that an exact quoted multi-word search phrase with an apostrophe is passed verbatim.",
+    "user": "Search the docs for the exact phrase \"can't connect to the database server\".",
+    "tools": [
+      {
+        "name": "search_docs",
+        "description": "Search documentation for a query string.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "The text to search for."
+            }
+          },
+          "required": [
+            "query"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "search_docs",
+      "args": {
+        "query": "can't connect to the database server"
+      }
+    }
+  },
+  {
+    "id": "string-set-commit-message",
+    "category": "string",
+    "description": "Tests fidelity of a multi-word commit message containing a colon and parentheses.",
+    "user": "Commit my staged changes with the message: fix(auth): handle expired tokens on refresh",
+    "tools": [
+      {
+        "name": "git_commit",
+        "description": "Create a git commit from staged changes with the given message.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "The commit message."
+            }
+          },
+          "required": [
+            "message"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "git_commit",
+      "args": {
+        "message": "fix(auth): handle expired tokens on refresh"
+      }
+    }
+  },
+  {
+    "id": "string-no-call-irrelevant",
+    "category": "string",
+    "description": "Tools deal with file zipping and URL shortening, both irrelevant to a general knowledge question, so no tool should be called.",
+    "user": "What's the difference between TCP and UDP at a high level?",
+    "tools": [
+      {
+        "name": "zip_directory",
+        "description": "Compress a directory into a zip archive.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "directory_path": {
+              "type": "string",
+              "description": "Absolute path of the directory to compress."
+            }
+          },
+          "required": [
+            "directory_path"
+          ]
+        }
+      },
+      {
+        "name": "shorten_url",
+        "description": "Create a shortened alias for a long URL.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "The long URL to shorten."
+            }
+          },
+          "required": [
+            "url"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "no_call"
+    }
+  },
+  {
+    "id": "enum-weather-unit-fahrenheit",
+    "category": "enum",
+    "description": "User explicitly requests Fahrenheit, mapping to the unit enum value 'fahrenheit' and the city to 'Boston'.",
+    "user": "What's the current temperature in Boston in Fahrenheit?",
+    "tools": [
+      {
+        "name": "get_current_weather",
+        "description": "Get the current weather for a given city in the requested temperature unit.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "city": {
+              "type": "string",
+              "description": "The city to get the weather for."
+            },
+            "unit": {
+              "type": "string",
+              "enum": [
+                "celsius",
+                "fahrenheit"
+              ],
+              "description": "The temperature unit to report."
+            }
+          },
+          "required": [
+            "city",
+            "unit"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "get_current_weather",
+      "args": {
+        "city": "Boston",
+        "unit": "fahrenheit"
+      }
+    }
+  },
+  {
+    "id": "enum-flight-search-business",
+    "category": "enum",
+    "description": "User asks for business class, mapping the cabin_class enum to 'business' with origin and destination.",
+    "user": "Find me flights from Chicago to Tokyo in business class.",
+    "tools": [
+      {
+        "name": "search_flights",
+        "description": "Search for flights between two cities in a given cabin class.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "origin": {
+              "type": "string",
+              "description": "Departure city."
+            },
+            "destination": {
+              "type": "string",
+              "description": "Arrival city."
+            },
+            "cabin_class": {
+              "type": "string",
+              "enum": [
+                "economy",
+                "premium_economy",
+                "business",
+                "first"
+              ],
+              "description": "The cabin class to search."
+            }
+          },
+          "required": [
+            "origin",
+            "destination",
+            "cabin_class"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "search_flights",
+      "args": {
+        "origin": "Chicago",
+        "destination": "Tokyo",
+        "cabin_class": "business"
+      }
+    }
+  },
+  {
+    "id": "enum-set-volume-mute",
+    "category": "enum",
+    "description": "User asks to mute the living room speaker, mapping the action enum to 'mute' for the named device.",
+    "user": "Mute the living room speaker.",
+    "tools": [
+      {
+        "name": "control_speaker",
+        "description": "Control a smart speaker by performing a volume action.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "device": {
+              "type": "string",
+              "description": "The name of the speaker device."
+            },
+            "action": {
+              "type": "string",
+              "enum": [
+                "mute",
+                "unmute",
+                "volume_up",
+                "volume_down"
+              ],
+              "description": "The volume action to perform."
+            }
+          },
+          "required": [
+            "device",
+            "action"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "control_speaker",
+      "args": {
+        "device": "living room speaker",
+        "action": "mute"
+      }
+    }
+  },
+  {
+    "id": "enum-convert-currency-eur",
+    "category": "enum",
+    "description": "User converts US dollars to euros, mapping from_currency to 'USD' and to_currency enum to 'EUR' with the amount.",
+    "user": "Convert 250 US dollars to euros.",
+    "tools": [
+      {
+        "name": "convert_currency",
+        "description": "Convert an amount from one currency to another.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "type": "number",
+              "description": "The amount of money to convert."
+            },
+            "from_currency": {
+              "type": "string",
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP",
+                "JPY"
+              ],
+              "description": "The currency to convert from."
+            },
+            "to_currency": {
+              "type": "string",
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP",
+                "JPY"
+              ],
+              "description": "The currency to convert to."
+            }
+          },
+          "required": [
+            "amount",
+            "from_currency",
+            "to_currency"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "convert_currency",
+      "args": {
+        "amount": 250,
+        "from_currency": "USD",
+        "to_currency": "EUR"
+      }
+    }
+  },
+  {
+    "id": "enum-no-call-poem-request",
+    "category": "no_call",
+    "description": "The only available tool sets a thermostat mode; the user asks for a haiku, which is unrelated, so no tool should be called.",
+    "user": "Can you write me a short haiku about autumn leaves?",
+    "tools": [
+      {
+        "name": "set_thermostat_mode",
+        "description": "Set the operating mode of the home thermostat.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "heat",
+                "cool",
+                "auto",
+                "off"
+              ],
+              "description": "The thermostat operating mode."
+            }
+          },
+          "required": [
+            "mode"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "no_call"
+    }
+  },
+  {
+    "id": "integer-set-thermostat-temperature",
+    "category": "integer",
+    "description": "User specifies an exact integer temperature; expected arg must be the number 68, not a string",
+    "user": "Set the living room thermostat to 68 degrees.",
+    "tools": [
+      {
+        "name": "set_thermostat",
+        "description": "Set the target temperature for a room's thermostat.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "room": {
+              "type": "string",
+              "description": "The name of the room"
+            },
+            "temperature": {
+              "type": "integer",
+              "description": "Target temperature in degrees"
+            }
+          },
+          "required": [
+            "room",
+            "temperature"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "set_thermostat",
+      "args": {
+        "room": "living room",
+        "temperature": 68
+      }
+    }
+  },
+  {
+    "id": "number-transfer-amount",
+    "category": "number",
+    "description": "User gives a decimal currency amount; expected arg must be the float 250.75 with the correct currency enum",
+    "user": "Transfer 250.75 USD from my checking account to my savings account.",
+    "tools": [
+      {
+        "name": "transfer_funds",
+        "description": "Transfer money between two accounts.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "from_account": {
+              "type": "string",
+              "description": "Source account name"
+            },
+            "to_account": {
+              "type": "string",
+              "description": "Destination account name"
+            },
+            "amount": {
+              "type": "number",
+              "description": "Amount of money to transfer"
+            },
+            "currency": {
+              "type": "string",
+              "enum": [
+                "USD",
+                "EUR",
+                "GBP",
+                "JPY"
+              ],
+              "description": "Currency code"
+            }
+          },
+          "required": [
+            "from_account",
+            "to_account",
+            "amount",
+            "currency"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "transfer_funds",
+      "args": {
+        "from_account": "checking",
+        "to_account": "savings",
+        "amount": 250.75,
+        "currency": "USD"
+      }
+    }
+  },
+  {
+    "id": "integer-open-firewall-port",
+    "category": "integer",
+    "description": "User specifies a TCP port and protocol; port must be integer 8080 and protocol the enum value",
+    "user": "Open port 8080 for TCP traffic on the web server.",
+    "tools": [
+      {
+        "name": "open_firewall_port",
+        "description": "Open a network port in the firewall.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "port": {
+              "type": "integer",
+              "description": "The port number to open"
+            },
+            "protocol": {
+              "type": "string",
+              "enum": [
+                "TCP",
+                "UDP"
+              ],
+              "description": "Network protocol"
+            },
+            "host": {
+              "type": "string",
+              "description": "The host or server name"
+            }
+          },
+          "required": [
+            "port",
+            "protocol"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "open_firewall_port",
+      "args": {
+        "port": 8080,
+        "protocol": "TCP",
+        "host": "web server"
+      }
+    }
+  },
+  {
+    "id": "number-apply-discount-percentage",
+    "category": "number",
+    "description": "User gives a percentage and product count; percentage must be number 15 and quantity integer 3",
+    "user": "Apply a 15 percent discount to 3 units of the order.",
+    "tools": [
+      {
+        "name": "apply_discount",
+        "description": "Apply a percentage discount to a number of order line items.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "percentage": {
+              "type": "number",
+              "description": "Discount percentage to apply"
+            },
+            "quantity": {
+              "type": "integer",
+              "description": "Number of units the discount applies to"
+            }
+          },
+          "required": [
+            "percentage",
+            "quantity"
+          ]
+        }
+      }
+    ],
+    "expect": {
+      "type": "tool_call",
+      "name": "apply_discount",
+      "args": {
+        "percentage": 15,
+        "quantity": 3
+      }
+    }
+  }
+]

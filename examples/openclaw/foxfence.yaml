@@ -1,0 +1,34 @@
+# foxfence config for the OpenClaw + Ollama reference integration (§11.4).
+# OpenClaw talks OpenAI to foxfence; foxfence shims tool-calling onto a local
+# Ollama model and enforces a small safety policy.
+
+listen: 0.0.0.0:4100                  # 0.0.0.0 so it's reachable inside docker
+api_keys: [ "${FOXFENCE_KEY}" ]       # OpenClaw sends this as its OpenAI key
+
+upstreams:
+  - name: ollama
+    # "ollama" is the docker-compose service name; use localhost if you run
+    # foxfence outside docker against a local Ollama.
+    base_url: http://ollama:11434/v1
+
+models:
+  - expose: qwen-tools                # the model name OpenClaw points at
+    upstream: ollama
+    model: qwen2.5:7b-instruct
+    shim: auto                        # probe, then native or json-prompted
+    probe: lazy
+    repair: { max_attempts: 2 }
+
+security:
+  on_detector_error: block            # fail-closed
+  detectors:
+    secrets: { action: mask }         # mask & restore secrets in prompts
+  tool_policy:
+    default: allow
+    rules:
+      - { tool: exec, args: { command: "*rm -rf*" }, action: block }
+      - { tool: send_email, action: block, message: "Email disabled in this demo." }
+
+audit:
+  file: /var/log/foxfence/audit.jsonl
+  include_content: false

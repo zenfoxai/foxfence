@@ -1,4 +1,4 @@
-import { loadConfig, ConfigError } from "./config/load.ts";
+import { loadConfig } from "./config/load.ts";
 import { createServer } from "./server.ts";
 
 function configPath(argv: string[]): string {
@@ -24,9 +24,10 @@ try {
     `models: ${config.models.map((m) => `${m.expose} → ${m.upstream}/${m.model}`).join(", ")}`,
   );
 } catch (e) {
-  if (e instanceof ConfigError) {
-    console.error(`foxfence: ${e.message}`);
-    process.exit(1);
-  }
-  throw e;
+  // Startup failures (bad config, unwritable audit path, invalid policy
+  // pattern, bad listen address) are operational, not bugs — surface a clean
+  // message and exit, never a raw stack trace. ConfigError is just the most
+  // common case.
+  console.error(`foxfence: ${e instanceof Error ? e.message : String(e)}`);
+  process.exit(1);
 }

@@ -1,6 +1,10 @@
 import type { Config, ModelRoute, Upstream } from "./config/schema.ts";
 import { errors } from "./pivot/errors.ts";
-import { forwardChatCompletion } from "./upstream/client.ts";
+import { handleChatCompletion, type PipelineOptions } from "./pipeline.ts";
+import { buildDetectors } from "./security/registry.ts";
+import { AuditLog } from "./audit.ts";
+import { CapabilityStore } from "./shim/probe.ts";
+import { resolveProfiles } from "./config/profiles.ts";
 
 interface Route {
   route: ModelRoute;
@@ -9,10 +13,15 @@ interface Route {
 
 function buildRouteTable(config: Config): Map<string, Route> {
   const upstreams = new Map(config.upstreams.map((u) => [u.name, u]));
+  // Resolve each route's `profile` (registry id or inline) to a concrete
+  // object so strategy selection reads it directly off the route.
+  const profiles = resolveProfiles(config);
   const table = new Map<string, Route>();
   for (const route of config.models) {
     // config validation guarantees the upstream exists
-    table.set(route.expose, { route, upstream: upstreams.get(route.upstream)! });
+    const resolved = profiles.get(route.expose);
+    const withProfile = resolved ? { ...route, profile: resolved } : route;
+    table.set(route.expose, { route: withProfile, upstream: upstreams.get(route.upstream)! });
   }
   return table;
 }
@@ -37,6 +46,27 @@ export function createServer(config: Config, options: ServerOptions = {}) {
   const routes = buildRouteTable(config);
   const apiKeys = new Set(config.api_keys);
   const startedAt = Math.floor(Date.now() / 1000);
+
+  const { detectors, warnings } = buildDetectors(config);
+  for (const warning of warnings) console.warn(`foxfence: ${warning}`);
+  const capabilities = new CapabilityStore();
+  const pipeline: PipelineOptions = {
+    detectors,
+    onDetectorError: config.security?.on_detector_error ?? "block",
+    audit: config.audit?.file ? AuditLog.open(config.audit.file) : null,
+    auditIncludeContent: config.audit?.include_content ?? false,
+    capabilities,
+  };
+
+  // probe: startup — eager capability detection, fire-and-forget (§6.1)
+  for (const { route, upstream } of routes.values()) {
+    if (route.probe === "startup") {
+      capabilities.resolve(route, upstream).then(
+        (caps) => console.log(`foxfence: probed ${upstream.name}/${route.model}: ${caps.toolCalling}`),
+        (e) => console.warn(`foxfence: startup probe failed for ${upstream.name}/${route.model}: ${e.message}`),
+      );
+    }
+  }
 
   function authorized(req: Request): boolean {
     if (apiKeys.size === 0) return true;
@@ -72,7 +102,7 @@ export function createServer(config: Config, options: ServerOptions = {}) {
     }
     const resolved = routes.get(request.model);
     if (!resolved) return errors.modelNotFound(request.model);
-    return forwardChatCompletion(request, resolved.route, resolved.upstream);
+    return handleChatCompletion(request, resolved.route, resolved.upstream, pipeline);
   }
 
   return Bun.serve({

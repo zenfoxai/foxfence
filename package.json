@@ -9,6 +9,7 @@
     "dev": "bun --watch run src/main.ts",
     "test": "bun test",
     "typecheck": "bunx tsc --noEmit",
+    "eval": "bun run eval/run.ts",
     "build": "bun build --compile --outfile dist/foxfence src/main.ts"
   },
   "dependencies": {

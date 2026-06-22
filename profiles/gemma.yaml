@@ -1,0 +1,8 @@
+# Google Gemma family. Gemma's chat template has no system role — system
+# content must be folded into the first user turn — so json-prompted/constrained
+# strategies must not emit a system message. (Native tool calling varies by
+# version/server, so this profile only records the template quirk.)
+- id: gemma-2
+  chatTemplateQuirks: [no-system-role]
+- id: gemma-3
+  chatTemplateQuirks: [no-system-role]

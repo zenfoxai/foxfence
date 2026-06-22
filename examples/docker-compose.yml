@@ -1,0 +1,31 @@
+# OpenClaw + foxfence + Ollama reference stack (§11.4).
+#
+#   export FOXFENCE_KEY=local-dev-key
+#   docker compose -f examples/docker-compose.yml up --build
+#   docker compose -f examples/docker-compose.yml exec ollama ollama pull qwen2.5:7b-instruct
+#   FOXFENCE_KEY=local-dev-key ./examples/smoke.sh
+#
+# Then point OpenClaw (or any OpenAI client) at http://localhost:4100/v1 with
+# api key $FOXFENCE_KEY and model "qwen-tools" — see examples/openclaw/README.md.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+  foxfence:
+    build:
+      context: ..
+      dockerfile: examples/Dockerfile
+    ports:
+      - "4100:4100"
+    environment:
+      - FOXFENCE_KEY=${FOXFENCE_KEY:-local-dev-key}
+    depends_on:
+      - ollama
+
+volumes:
+  ollama:

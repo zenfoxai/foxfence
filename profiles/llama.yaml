@@ -1,0 +1,9 @@
+# Meta Llama 3.1+ Instruct — native tool calling and a system role. Earlier
+# Llama 2/3.0 builds have no reliable native tool calling; leave those on
+# `shim: auto` (probe) or pin json-prompted/constrained.
+- id: llama-3.1-instruct
+  capabilities:
+    toolCalling: native
+- id: llama-3.3-instruct
+  capabilities:
+    toolCalling: native

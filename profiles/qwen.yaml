@@ -1,0 +1,7 @@
+# Alibaba Qwen2.5 Instruct — reliable native (Hermes-style) tool calling and a
+# normal system role. Declaring native here lets you skip the probe in prod
+# (deterministic) without a runtime downgrade.
+- id: qwen2.5-instruct
+  capabilities:
+    toolCalling: native
+  contextWindow: 32768

@@ -1,4 +1,4 @@
-# foxfence configuration — phase 1 (transparent proxy)
+# foxfence configuration — phase 4 (proxy + safety pipeline + shim + tool policy)
 # Copy to foxfence.yaml and adjust. Spec: SPEC-architecture.md §7.
 
 listen: 127.0.0.1:4100
@@ -9,16 +9,61 @@ listen: 127.0.0.1:4100
 upstreams:
   - name: local-ollama
     base_url: http://localhost:11434/v1
-  # - name: openrouter
-  #   base_url: https://openrouter.ai/api/v1
-  #   api_key: "${OPENROUTER_KEY}"
+  # - name: vllm
+  #   base_url: http://localhost:8000/v1
+  #   constrained: guided_json    # enables the `constrained` strategy
+  #                               # (guided_json = vLLM; response_format = OpenAI/llama.cpp)
+
+# Optional registry of model profiles; default ./profiles. See profiles/README.md.
+# profiles_dir: ./profiles
 
 models:
   # name exposed to the agent → upstream + real model.
   - expose: qwen-tools
     upstream: local-ollama
     model: qwen2.5:7b-instruct
-    # Later phases (accepted, currently ignored):
-    # shim: auto
-    # probe: lazy
-    # repair: { max_attempts: 2 }
+    # Tool-calling shim (all optional, defaults shown):
+    # shim: auto                  # auto | native | json-prompted | constrained | react
+    # probe: lazy                 # lazy | startup | off
+    # repair: { max_attempts: 2 } # bounded repair loop; 0 disables
+    # profile: qwen2.5-instruct   # pin capabilities/quirks from the registry, or inline
+    # (react = Thought/Action format for tiny models; opt-in only, never auto-selected)
+
+security:
+  # What to do when a detector itself fails: block (fail-closed, default) or pass.
+  on_detector_error: block
+  detectors:
+    # Defaults shown. Actions: pass | flag | mask | block | off
+    secrets:   { action: mask }    # mask & restore on requests, redact on responses
+    pii-basic: { action: flag }    # audit-only by default
+
+    # Remote detectors (§5.2): POST content to an external classifier (LLM
+    # Guard, OpenGuardrails, an in-house model behind a small HTTP server).
+    # This is also how prompt-injection is enabled. `action` is the
+    # consequence when the classifier flags.
+    # prompt-injection:
+    #   action: flag                 # flag | block
+    #   remote: http://localhost:8800/classify
+    #   roles: [tool]                # only inspect tool-sourced content (optional)
+    #   phases: [request]            # default [request]
+    #   timeout_ms: 2000             # default 2000; a timeout is fail-closed
+    #   threshold: 0.5               # for score-based services (default 0.5)
+
+  # Tool-call policy (§5.3): evaluated on parsed tool calls, so it enforces
+  # policy even for models with no native tool calling. Patterns are globs
+  # (* = any run, ? = any char) or /regex/flags; a leading ! negates.
+  # NOTE: arg matching is best-effort defense-in-depth, NOT a sandbox — use
+  # `default: deny` allowlisting for anything that truly matters.
+  # tool_policy:
+  #   default: allow                # allow | deny (deny = allowlist mode)
+  #   rules:                        # first matching rule wins
+  #     - { tool: exec, args: { command: "*rm -rf*" }, action: block }
+  #     - tool: "browser_*"
+  #       args: { url: "!https://*.internal.corp/*" }   # ! = outside allowlist
+  #       action: flag
+  #     - { tool: send_email, action: block, message: "Email disabled by policy." }
+
+audit:
+  # Local JSONL audit trail. Omit this section to disable. No telemetry, ever.
+  file: ./foxfence-audit.jsonl
+  include_content: false           # metadata only by default
