@@ -183,14 +183,14 @@ bun run eval --endpoint <url> --model <name> --key <key>  # a real model
 bun run eval --endpoint <url> --model <name> --shim json-prompted  # force the shim
 ```
 
-**Real-model results** ([`eval/results.md`](./eval/results.md), 7 models across
-OpenRouter + Fireworks): foxfence took **Cohere Command A from 0% → 100%** (it
-emits no native tool calls over an OpenAI-compatible endpoint — the auto-probe
-shimmed it), improved mid-tier native models (Qwen2.5-7B 83→90%, Llama-3.1-8B
-86→100%), and was **transparent on frontier models** (GPT-4o, Kimi K2.6,
-GLM-5.2, gpt-oss-120b all 100→100% with zero repairs — it never degrades a model
-that already works). Forcing the prompted shim even beat Qwen's own native path.
-The corpus lives in
+**Real-model results** ([`eval/results.md`](./eval/results.md), via OpenRouter +
+Fireworks): foxfence improved native models (Qwen2.5-7B 83→90%, Llama-3.1-8B
+86→100%) through its runtime downgrade + repair loop, and was **transparent on
+frontier models** (GPT-4o, Kimi K2.6, GLM-5.2, gpt-oss-120b all 100→100% with
+zero repairs — it never degrades a model that already works). Forcing the
+prompted shim even matched or beat a model's own native path. The no-native-tools
+rescue case is shown deterministically by the bundled simulator (0→~86%). The
+corpus lives in
 [`eval/cases/`](./eval/cases/) (validated at load: every expected call must
 conform to its tool's JSON Schema); the scorer is in `eval/score.ts`. Run real
 models with `--endpoint` and contribute their tables.

@@ -1,14 +1,15 @@
 # Cohere Command A family — flagship agentic / tool-use models.
 #
-# IMPORTANT (measured 2026-06): Command A has native tool calling in Cohere's
-# own API, but over OpenAI-COMPATIBLE endpoints (e.g. OpenRouter) it does NOT
-# reliably emit OpenAI-format `tool_calls` — called directly it scored 0% on
-# our tool-calling eval, while `shim: auto` probed, fell back to json-prompted,
-# and recovered it to 100%. So we deliberately DO NOT pin `toolCalling: native`
-# here: that would force native passthrough and break tool calling on those
-# endpoints. Leave the route on `shim: auto` and let the probe decide per
-# deployment. (If you serve Command A via Cohere's native API behind a shim
-# that does translate tools, you may pin native yourself after verifying.)
+# Command A supports native tool calling (OpenAI-style `tools`, returns
+# `tool_calls`; see https://docs.cohere.com/docs/tool-use-overview). We do NOT
+# hard-pin `toolCalling: native` here only because tool support depends on the
+# ENDPOINT you route through: some OpenAI-compatible proxies don't expose tool
+# use for it (e.g. `cohere/command-a` via OpenRouter's default provider returns
+# "no endpoints support tool use"). Leaving the route on `shim: auto` lets the
+# probe adapt per deployment — native passthrough against a tool-supporting
+# endpoint (Cohere's API / compatibility endpoint), or the prompted shim where
+# the endpoint can't. Pin `shim: native` yourself once you've confirmed your
+# endpoint serves tools.
 - id: command-a-plus
   contextWindow: 256000
 - id: command-a

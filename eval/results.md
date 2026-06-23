@@ -14,8 +14,7 @@ firing.
 
 | model (via) | direct | foxfence (auto) | repairs |
 |---|---|---|---|
-| **cohere/command-a** (OpenRouter) | **0%** ¹ | **100%** | 2 |
-| **qwen2.5-7b-instruct** (OpenRouter) | 83% | **90%** ² | 5 |
+| **qwen2.5-7b-instruct** (OpenRouter) | 83% | **90%** ¹ | 5 |
 | **llama-3.1-8b-instruct** (OpenRouter) | 86% | **100%** | 3 |
 | **gpt-4o** (OpenRouter) | 100% | 100% | 0 |
 | **kimi-k2.6** (Fireworks) | 100% | 100% | 0 |
@@ -26,14 +25,20 @@ firing.
 it never introduced a false tool call, and on Llama it fixed a spurious direct
 call, 80→100.)*
 
-¹ Cohere Command A emits **no OpenAI-format native tool calls** over an
-OpenAI-compatible endpoint, so called directly it scores 0%. foxfence's
-auto-probe detected that, fell back to `json-prompted`, and reached 100%. This
-is why `profiles/cohere.yaml` does **not** pin `toolCalling: native`.
-
-² On Qwen, the provider returned malformed native tool calls twice; foxfence's
+¹ On Qwen, the provider returned malformed native tool calls twice; foxfence's
 runtime native→json-prompted downgrade fired and the repair loop recovered the
 rest.
+
+> **Methodology note — Cohere Command A.** An earlier version of this table
+> reported `cohere/command-a` at 0% direct. That was **invalid**: the route we
+> used (`cohere/command-a` via OpenRouter's default provider) returns
+> `404 "No endpoints found that support tool use"` — the request *errors* rather
+> than producing a tool call, so it can't be scored. Cohere Command A does
+> support native tool calling (OpenAI-style `tools`; see
+> [Cohere's docs](https://docs.cohere.com/docs/tool-use-overview)); the 0% was a
+> provider-routing artifact, not a model result. We've removed the row rather
+> than publish an unfair number. To evaluate Command A, point the harness at a
+> tool-supporting endpoint (Cohere's own API / compatibility endpoint).
 
 ### Forcing the prompted shim (`--shim json-prompted`)
 
@@ -51,14 +56,15 @@ calling.
 
 ## What this validates
 
-- **It rescues models the endpoint can't tool-call** (Cohere: 0→100) — the core
-  capability-shim claim, on a real flagship.
-- **It improves mid-tier native models** (Qwen 83→90, Llama 86→100) via the
-  runtime downgrade + repair loop.
+- **It improves native models** (Qwen 83→90, Llama 86→100) via the runtime
+  downgrade + repair loop, and the forced-shim runs show the prompted protocol
+  can match or beat a model's native tool calling.
 - **It is transparent on frontier models** (GPT-4o, Kimi K2.6, GLM-5.2,
   gpt-oss-120b all 100→100, 0 repairs) — principle #4: never degrade a model
   that already works. For these, foxfence's value is the *safety layer* (secrets,
   PII, tool-policy) plus repair-loop insurance, not raw tool-call capability.
+- **The no-native-tools rescue case** — a model that emits no tool calls at all —
+  is shown deterministically by the bundled simulator below (0% → ~86%).
 
 **Caveat:** numbers are at provider-default temperature, so `direct` and
 `foxfence` are independent samples — small exact-match-rate wobble between them
