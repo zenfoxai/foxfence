@@ -38,6 +38,17 @@ export const ModelRouteSchema = z.looseObject({
   repair: z
     .looseObject({ max_attempts: z.number().int().min(0).max(5).default(2) })
     .optional(),
+  // Loop-breaker (mode: infinite retry loops). Default on — it only ever fires
+  // on a clearly pathological pattern (the identical tool call repeated
+  // `threshold` times in the request history), so it never touches healthy
+  // traffic. Set `enabled: false` to disable.
+  loop_breaker: z
+    .looseObject({
+      enabled: z.boolean().default(true),
+      threshold: z.number().int().min(2).max(50).default(3),
+      action: z.enum(["nudge", "break"]).default("nudge"),
+    })
+    .optional(),
   // Registry id (string) or an inline profile object.
   profile: z.union([z.string().min(1), ModelProfileSchema]).optional(),
 });

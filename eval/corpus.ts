@@ -10,11 +10,19 @@ export interface RawCase {
   id: string;
   category: string;
   description: string;
-  user: string;
+  /** The current user turn. Optional when `history` is present (a loop case
+   * resumes after a tool result, with no new user message). */
+  user?: string;
+  /** Prior conversation turns in OpenAI message shape — used by multi-turn
+   * cases (loop recovery, state drift). Sent verbatim before `user`. */
+  history?: Array<Record<string, unknown>>;
   tools: Array<{ name: string; description: string; parameters: Record<string, unknown> }>;
   expect:
     | { type: "tool_call"; name: string; args?: Record<string, unknown> }
-    | { type: "no_call" };
+    | { type: "no_call" }
+    // Loop recovery: the response must NOT be the identical repeated call —
+    // a corrected call, a different tool, or a final answer all pass.
+    | { type: "avoid_repeat"; name: string; args: Record<string, unknown> };
 }
 
 export interface ToolDef {
@@ -26,17 +34,19 @@ export interface EvalCase {
   id: string;
   category: string;
   description: string;
-  messages: Array<{ role: "user"; content: string }>;
+  messages: Array<Record<string, unknown>>;
   tools: ToolDef[];
   expect: RawCase["expect"];
 }
 
 export function normalize(raw: RawCase): EvalCase {
+  const messages: Array<Record<string, unknown>> = [...(raw.history ?? [])];
+  if (raw.user) messages.push({ role: "user", content: raw.user });
   return {
     id: raw.id,
     category: raw.category,
     description: raw.description,
-    messages: [{ role: "user", content: raw.user }],
+    messages,
     tools: raw.tools.map((t) => ({
       type: "function",
       function: { name: t.name, description: t.description, parameters: t.parameters },
@@ -51,8 +61,8 @@ export function normalize(raw: RawCase): EvalCase {
  * never silently score against a malformed case. */
 export function validateCase(raw: RawCase): string[] {
   const errors: string[] = [];
-  if (!raw.id || !raw.user || !Array.isArray(raw.tools) || raw.tools.length === 0) {
-    errors.push("missing id/user/tools");
+  if (!raw.id || (!raw.user && !raw.history) || !Array.isArray(raw.tools) || raw.tools.length === 0) {
+    errors.push("missing id/(user|history)/tools");
     return errors;
   }
   const byName = new Map(raw.tools.map((t) => [t.name, t]));
@@ -61,7 +71,7 @@ export function validateCase(raw: RawCase): string[] {
       errors.push(`tool "${t.name}" has no parameters schema`);
     }
   }
-  if (raw.expect.type === "tool_call") {
+  if (raw.expect.type === "tool_call" || raw.expect.type === "avoid_repeat") {
     const tool = byName.get(raw.expect.name);
     if (!tool) {
       errors.push(`expected tool "${raw.expect.name}" is not among the declared tools`);

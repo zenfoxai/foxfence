@@ -1,0 +1,84 @@
+[
+  {
+    "id": "loop-weather-unavailable",
+    "category": "loop",
+    "description": "get_weather keeps returning a vague service error; the model should stop repeating the identical call.",
+    "tools": [
+      {
+        "name": "get_weather",
+        "description": "Get the current weather for a city.",
+        "parameters": {
+          "type": "object",
+          "properties": { "city": { "type": "string", "description": "City name." } },
+          "required": ["city"]
+        }
+      }
+    ],
+    "history": [
+      { "role": "user", "content": "What's the weather in Paris right now?" },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "c1", "type": "function", "function": { "name": "get_weather", "arguments": "{\"city\":\"Paris\"}" } }] },
+      { "role": "tool", "tool_call_id": "c1", "content": "Error: service unavailable (503)." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "c2", "type": "function", "function": { "name": "get_weather", "arguments": "{\"city\":\"Paris\"}" } }] },
+      { "role": "tool", "tool_call_id": "c2", "content": "Error: service unavailable (503)." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "c3", "type": "function", "function": { "name": "get_weather", "arguments": "{\"city\":\"Paris\"}" } }] },
+      { "role": "tool", "tool_call_id": "c3", "content": "Error: service unavailable (503)." }
+    ],
+    "expect": { "type": "avoid_repeat", "name": "get_weather", "args": { "city": "Paris" } }
+  },
+  {
+    "id": "loop-search-ratelimited",
+    "category": "loop",
+    "description": "search is rate-limited and returns no useful detail; the model should change approach instead of re-firing.",
+    "tools": [
+      {
+        "name": "search",
+        "description": "Search the web for a query.",
+        "parameters": {
+          "type": "object",
+          "properties": { "query": { "type": "string", "description": "Search query." } },
+          "required": ["query"]
+        }
+      }
+    ],
+    "history": [
+      { "role": "user", "content": "Find the population of Liechtenstein." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "s1", "type": "function", "function": { "name": "search", "arguments": "{\"query\":\"population of Liechtenstein\"}" } }] },
+      { "role": "tool", "tool_call_id": "s1", "content": "Error: 429 rate limited." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "s2", "type": "function", "function": { "name": "search", "arguments": "{\"query\":\"population of Liechtenstein\"}" } }] },
+      { "role": "tool", "tool_call_id": "s2", "content": "Error: 429 rate limited." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "s3", "type": "function", "function": { "name": "search", "arguments": "{\"query\":\"population of Liechtenstein\"}" } }] },
+      { "role": "tool", "tool_call_id": "s3", "content": "Error: 429 rate limited." }
+    ],
+    "expect": { "type": "avoid_repeat", "name": "search", "args": { "query": "population of Liechtenstein" } }
+  },
+  {
+    "id": "loop-currency-bad-code",
+    "category": "loop",
+    "description": "convert_currency fails on a bad currency code; the fix is to correct the argument, not repeat it.",
+    "tools": [
+      {
+        "name": "convert_currency",
+        "description": "Convert an amount between two ISO 4217 currency codes (e.g. USD, EUR, GBP).",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "amount": { "type": "number", "description": "Amount to convert." },
+            "from": { "type": "string", "description": "Source ISO 4217 code." },
+            "to": { "type": "string", "description": "Target ISO 4217 code." }
+          },
+          "required": ["amount", "from", "to"]
+        }
+      }
+    ],
+    "history": [
+      { "role": "user", "content": "Convert 100 US dollars to euros." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "x1", "type": "function", "function": { "name": "convert_currency", "arguments": "{\"amount\":100,\"from\":\"DOLLAR\",\"to\":\"EUR\"}" } }] },
+      { "role": "tool", "tool_call_id": "x1", "content": "Error: unknown currency code 'DOLLAR'." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "x2", "type": "function", "function": { "name": "convert_currency", "arguments": "{\"amount\":100,\"from\":\"DOLLAR\",\"to\":\"EUR\"}" } }] },
+      { "role": "tool", "tool_call_id": "x2", "content": "Error: unknown currency code 'DOLLAR'." },
+      { "role": "assistant", "content": null, "tool_calls": [{ "id": "x3", "type": "function", "function": { "name": "convert_currency", "arguments": "{\"amount\":100,\"from\":\"DOLLAR\",\"to\":\"EUR\"}" } }] },
+      { "role": "tool", "tool_call_id": "x3", "content": "Error: unknown currency code 'DOLLAR'." }
+    ],
+    "expect": { "type": "avoid_repeat", "name": "convert_currency", "args": { "amount": 100, "from": "DOLLAR", "to": "EUR" } }
+  }
+]
