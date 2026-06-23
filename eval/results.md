@@ -18,6 +18,7 @@ firing.
 | **llama-3.1-8b-instruct** (OpenRouter) | 86% | **100%** | 3 |
 | **gpt-4o** (OpenRouter) | 100% | 100% | 0 |
 | **mistral-small-3.2-24b** (OpenRouter) | 97% | 97% | 0 |
+| **ministral-8b-2512** (OpenRouter) | 100% | 97% | 0 |
 | **kimi-k2.6** (Fireworks) | 100% | 100% | 0 |
 | **glm-5.2** (Fireworks) | 100% | 100% | 0 |
 | **gpt-oss-120b** (Fireworks, reasoning) | 100% | 100% | 0 |
@@ -77,12 +78,13 @@ calling.
   downgrade + repair loop, and the forced-shim runs show the prompted protocol
   can match or beat a model's native tool calling.
 - **It is transparent on capable models** (GPT-4o, Kimi K2.6, GLM-5.2,
-  gpt-oss-120b, Mistral Small 3.2, and Cohere Command A — all native passthrough
-  with 0 repairs) — principle #4: never degrade a model that already works. The
-  sub-100 figures (Mistral 97→97, Command A 100→97) are the model's own behavior
-  and provider-default-temperature sampling, *not* foxfence. For these, foxfence's
-  value is the *safety layer* (secrets, PII, tool-policy) plus repair-loop
-  insurance, not raw tool-call capability.
+  gpt-oss-120b, Mistral Small 3.2, Ministral 8B, and Cohere Command A — all
+  native passthrough with 0 repairs) — principle #4: never degrade a model that
+  already works. The sub-100 figures (Mistral 97→97, Ministral 8B and Command A
+  100→97) are the model's own behavior and provider-default-temperature sampling,
+  *not* foxfence. Notably even an 8B model (Ministral) is a clean native
+  tool-caller here. For these, foxfence's value is the *safety layer* (secrets,
+  PII, tool-policy) plus repair-loop insurance, not raw tool-call capability.
 - **The no-native-tools rescue case** — a model that emits no tool calls at all —
   is shown deterministically by the bundled simulator below (0% → ~86%).
 
