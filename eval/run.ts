@@ -134,15 +134,15 @@ export function renderTable(result: EvalResult): string {
   lines.push(`Cases: ${result.cases}`);
   lines.push("");
   lines.push(
-    "| mode | valid-call rate | exact-match rate | tool-call cases | no-call cases | loop-broke cases | repairs |",
+    "| mode | valid-call rate | exact-match rate | tool-call cases | no-call cases | loop-broke cases | drift-resist cases | repairs |",
   );
-  lines.push("|---|---|---|---|---|---|---|");
+  lines.push("|---|---|---|---|---|---|---|---|");
   for (const row of result.rows) {
     const a = row.agg;
     lines.push(
       `| ${row.mode} | ${pct(a.validCallRate)} | ${pct(a.exactMatchRate)} | ` +
         `${pct(a.toolValidRate)} (${a.toolCases}) | ${pct(a.noCallCorrectRate)} (${a.noCallCases}) | ` +
-        `${pct(a.loopBrokeRate)} (${a.loopCases}) | ${row.totalRepairs} |`,
+        `${pct(a.loopBrokeRate)} (${a.loopCases}) | ${pct(a.driftResistRate)} (${a.driftCases}) | ${row.totalRepairs} |`,
     );
   }
   return lines.join("\n");

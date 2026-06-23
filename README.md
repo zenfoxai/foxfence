@@ -162,6 +162,37 @@ models:
       action: nudge       # nudge (default) | break
 ```
 
+### Re-grounding (state drift)
+
+The companion failure mode: over a long, tool-heavy conversation, small models
+drift off-distribution and start **ignoring their original system
+instructions** (the constraint that said "read-only", "answer in French",
+"never call X"). foxfence counters this statelessly — again reading only the
+request — by re-asserting the system prompt where the model will actually weigh
+it.
+
+- **Detection** — once the history carries `after_tool_results` tool results
+  (default 6) *and* there is a system message, the conversation is considered
+  drift-prone. On by default.
+- **Re-assertion** — foxfence appends a compact reminder near the end of the
+  request ("your original instructions are still in effect: …"), carrying the
+  original system text truncated to `max_chars` (default 600) so a long prompt
+  can't blow the token budget. It is **additive** — existing turns are never
+  dropped or rewritten.
+- **Visible** — sets the `X-Foxfence-Reground` header and a `foxfence.reground`
+  field (`{ tool_results }`).
+
+```yaml
+models:
+  - expose: my-model
+    upstream: local-ollama
+    model: qwen2.5:7b-instruct
+    reground:
+      enabled: true            # default true; set false to turn off
+      after_tool_results: 6    # tool results before re-asserting (default 6)
+      max_chars: 600           # truncate the re-asserted prompt (default 600)
+```
+
 ### Tool-call policy
 
 The safety differentiator (§5.3): a declarative allow/deny policy enforced on
@@ -227,14 +258,20 @@ in [`eval/cases/`](./eval/cases/) (validated at load: every expected call must
 conform to its tool's JSON Schema); the scorer is in `eval/score.ts`. Run real
 models with `--endpoint` and contribute their tables.
 
-**Loop recovery** — the corpus also includes multi-turn `loop` cases (a tool
-call that keeps failing, the model re-firing it identically). The `loop-broke`
-column scores whether the next turn escapes the loop. On Hermes 3 (Q4 via
-Ollama) the loop-breaker lifted recovery from **33% → 67%** with the default
-`nudge`; `action: break` makes it deterministic (the loop is stopped without
-another model call) at the cost of the model not getting to self-correct. This
-is the dimension where foxfence earns its keep on small/self-hosted models —
-on plain single-turn tool calling a model that's already good gains little.
+**Multi-turn reliability (loop + drift)** — the corpus also includes `loop`
+cases (a failing tool call the model re-fires identically) and `drift` cases (a
+long tool-heavy chat where the model forgets a system constraint), scored by the
+`loop-broke` and `drift-resist` columns. The **mechanisms are verified
+deterministically** in `test/loop.test.ts` and `test/reground.test.ts` (the
+nudge / re-assertion is provably injected). The *real-model* numbers on Hermes 3
+(Q4 via Ollama) are small-sample and noisy — loop recovery ranged 33–67% across
+runs (default `nudge`; `action: break` makes it deterministic, no extra model
+call), and the 2 drift cases sat at 50% with and without (Hermes 3 isn't
+drift-prone enough at this depth to need the reminder). These features target
+**weaker models and longer conversations** than Hermes 3; both are additive and
+low-risk, so they never degrade a model that doesn't need them. This is still
+the dimension where foxfence helps small/self-hosted models — single-turn tool
+calling on a capable model gains little.
 
 A safety red-team corpus (§11.3 — secret exfiltration, injection-driven
 dangerous tool calls) lives in `test/redteam.test.ts` as non-regression guards:

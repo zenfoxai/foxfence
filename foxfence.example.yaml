@@ -34,6 +34,13 @@ models:
     #   enabled: true             # set false to disable
     #   threshold: 3              # identical repeats in the history before acting
     #   action: nudge             # nudge (inject a corrective hint) | break (hard stop)
+    # Re-grounding: counters state drift on long tool-heavy chats by re-asserting
+    # the system prompt. On by default; the block shows defaults. Sets
+    # X-Foxfence-Reground.
+    # reground:
+    #   enabled: true             # set false to disable
+    #   after_tool_results: 6     # tool results in the history before re-asserting
+    #   max_chars: 600            # truncate the re-asserted system prompt
 
 security:
   # What to do when a detector itself fails: block (fail-closed, default) or pass.

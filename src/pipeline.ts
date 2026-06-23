@@ -9,6 +9,7 @@ import { CapabilityStore, chooseStrategy, type StrategyChoice } from "./shim/pro
 import { runToolShim } from "./shim/repair.ts";
 import { StreamSanitizer } from "./shim/stream-sanitize.ts";
 import { detectToolCallLoop, loopBreakerNudge, loopBreakResponse } from "./loop.ts";
+import { detectStateDrift, regroundReminder } from "./reground.ts";
 
 export interface PipelineOptions {
   detectors: Detector[];
@@ -407,6 +408,7 @@ interface StreamFinalize {
   maskedSoFar: number;
   shimInfo?: Record<string, unknown>;
   loopInfo?: Record<string, unknown>;
+  regroundInfo?: Record<string, unknown>;
   onComplete: (info: { verdicts: AuditVerdict[]; masked: number; restored: number; usage?: unknown }) => void;
 }
 
@@ -591,11 +593,12 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
         }
 
         const foxfence =
-          verdicts.length > 0 || fin.shimInfo || fin.loopInfo || streamError
+          verdicts.length > 0 || fin.shimInfo || fin.loopInfo || fin.regroundInfo || streamError
             ? {
                 ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
                 ...(fin.shimInfo ? { shim: fin.shimInfo } : {}),
                 ...(fin.loopInfo ? { loop: fin.loopInfo } : {}),
+                ...(fin.regroundInfo ? { reground: fin.regroundInfo } : {}),
                 ...(streamError ? { stream_error: true } : {}),
               }
             : undefined;
@@ -624,6 +627,7 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
     headers.set("x-foxfence-repairs", String(fin.shimInfo.repairs));
   }
   if (fin.loopInfo) headers.set("x-foxfence-loop", "nudge");
+  if (fin.regroundInfo) headers.set("x-foxfence-reground", "true");
   return new Response(stream, { status: 200, headers });
 }
 
@@ -640,6 +644,7 @@ export async function handleChatCompletion(
   let restored = 0;
   let shimInfo: Record<string, unknown> | undefined;
   let loopInfo: Record<string, unknown> | undefined;
+  let regroundInfo: Record<string, unknown> | undefined;
 
   const audit = (
     status: number,
@@ -706,6 +711,21 @@ export async function handleChatCompletion(
     }
   }
 
+  // ── Re-grounding (failure mode: state drift) ───────────────────
+  // Stateless: re-assert the original system prompt near the end of the request
+  // once the conversation has drifted through many tool results. Additive — it
+  // never removes or rewrites existing turns.
+  const rg = route.reground as
+    | { enabled?: boolean; after_tool_results?: number; max_chars?: number }
+    | undefined;
+  if (rg?.enabled !== false) {
+    const drift = detectStateDrift(body.messages, rg?.after_tool_results ?? 6);
+    if (drift) {
+      regroundInfo = { tool_results: drift.toolResults };
+      (body.messages as unknown[]).push(regroundReminder(drift, rg?.max_chars ?? 600));
+    }
+  }
+
   // ── Strategy selection (§6.1) ──────────────────────────────────
   const wantsTools =
     Array.isArray(body.tools) && (body.tools as unknown[]).length > 0 && body.tool_choice !== "none";
@@ -759,6 +779,7 @@ export async function handleChatCompletion(
         maskedSoFar: masked,
         shimInfo,
         loopInfo,
+        regroundInfo,
         onComplete: ({ verdicts: v, masked: m, restored: r, usage }) => {
           audit(200, false, {
             verdicts: v,
@@ -857,12 +878,13 @@ export async function handleChatCompletion(
   responseBody.model = route.expose;
   const repairs = typeof shimInfo?.repairs === "number" ? (shimInfo.repairs as number) : 0;
   const policyActive = policy.blocked.length > 0 || policy.flagged.length > 0;
-  if (verdicts.length > 0 || shimInfo || policyActive || loopInfo) {
+  if (verdicts.length > 0 || shimInfo || policyActive || loopInfo || regroundInfo) {
     responseBody.foxfence = {
       ...(typeof responseBody.foxfence === "object" ? responseBody.foxfence : {}),
       ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
       ...(shimInfo ? { shim: shimInfo } : {}),
       ...(loopInfo ? { loop: loopInfo } : {}),
+      ...(regroundInfo ? { reground: regroundInfo } : {}),
       ...(policyActive
         ? { tool_policy: { blocked: policy.blocked, flagged: policy.flagged } }
         : {}),
@@ -882,6 +904,7 @@ export async function handleChatCompletion(
   if (repairs > 0) headers.set("x-foxfence-repairs", String(repairs));
   if (policy.blockedAny) headers.set("x-foxfence-blocked", "true");
   if (loopInfo) headers.set("x-foxfence-loop", "nudge");
+  if (regroundInfo) headers.set("x-foxfence-reground", "true");
   if (ctx.stream) return completionToSSE(responseBody, headers);
   return Response.json(responseBody, { status: 200, headers });
 }

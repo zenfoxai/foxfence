@@ -49,6 +49,16 @@ export const ModelRouteSchema = z.looseObject({
       action: z.enum(["nudge", "break"]).default("nudge"),
     })
     .optional(),
+  // Re-grounding (mode: state drift). Default on — once a conversation has
+  // accumulated `after_tool_results` tool results, foxfence re-asserts the
+  // original system prompt near the end of the request. Additive only.
+  reground: z
+    .looseObject({
+      enabled: z.boolean().default(true),
+      after_tool_results: z.number().int().min(1).max(200).default(6),
+      max_chars: z.number().int().min(50).max(8000).default(600),
+    })
+    .optional(),
   // Registry id (string) or an inline profile object.
   profile: z.union([z.string().min(1), ModelProfileSchema]).optional(),
 });

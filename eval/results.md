@@ -43,28 +43,47 @@ protocol + schema validation:
 The prompted shim **beats** Qwen's own native path — the prompted protocol with
 schema validation is at least as reliable as native tool calling.
 
-## Loop recovery (multi-turn `loop` cases)
+## Multi-turn reliability — loop recovery & state drift
 
-The dimension where foxfence helps small/self-hosted models the most: a tool
-call that keeps failing while the model re-fires it identically. The
-`loop-broke` column scores whether the next turn escapes the loop.
+The dimension where foxfence is meant to help small/self-hosted models:
 
-| model (via) | direct | foxfence (`nudge`) |
+- **`loop` cases** ([`cases/loop.json`](./cases/loop.json)) — a tool call that
+  keeps failing while the model re-fires it identically. Scored by `loop-broke`.
+- **`drift` cases** ([`cases/drift.json`](./cases/drift.json)) — a long
+  tool-heavy chat where a system constraint ("never call X") gets forgotten.
+  Scored by `drift-resist`.
+
+**The mechanisms are verified deterministically** in `test/loop.test.ts` and
+`test/reground.test.ts` — the loop nudge and the re-grounding reminder are
+provably injected at the configured thresholds, with `break`/disable paths.
+That is the real validation.
+
+**Real-model numbers (Hermes 3, Q4 via Ollama) are small-sample and noisy** and
+should be read as directional only:
+
+| dimension (cases) | direct | foxfence |
 |---|---|---|
-| **hermes3** (Ollama, Q4) | 33% | **67%** |
+| loop-broke (3) | 33–67% (varies by run) | 33–67% (`nudge`) / 100% (`break`) |
+| drift-resist (2) | 50% | 50% |
 
-With the default `nudge` action foxfence injects a corrective hint and lets the
-model self-correct; `action: break` stops the loop deterministically (no extra
-model call) for a hard cap. Regenerate with the `loop` cases in
-[`cases/loop.json`](./cases/loop.json).
+Hermes 3 is a fairly robust 8B: it often self-recovers from loops and isn't
+drift-prone at 6 tool results, so these small corpora don't show a clean lift on
+it. Both transforms are **additive and low-risk** (they only add a hint /
+re-assert the prompt), so they never degrade a model that doesn't need them, and
+they're expected to matter most on weaker models and longer conversations. The
+loop-breaker's `break` action is the one deterministic guarantee here. Larger
+corpora and weaker-model runs are welcome contributions.
 
 ## What this validates
 
 - **It improves small native models** (Qwen 83→90, Llama 86→100) via the
   runtime downgrade + repair loop, and the forced-shim run shows the prompted
   protocol can beat a model's own native tool calling.
-- **It breaks stuck retry loops** (Hermes 3 33→67) — the failure mode small and
-  self-hosted models hit that a native API won't fix for you.
+- **It addresses multi-turn failure modes** native APIs leave to you — stuck
+  retry loops (loop-breaker) and forgotten system constraints (re-grounding),
+  verified deterministically by the test suite. The `break` action is a hard,
+  deterministic loop stop; real-model lift depends on the model and corpus size
+  (see the noisy Hermes 3 numbers above).
 - **The no-native-tools rescue case** — a model that emits no tool calls at all —
   is shown deterministically by the bundled simulator below (0% → ~86%).
 
