@@ -266,15 +266,15 @@ cases (a failing tool call the model re-fires identically) and `drift` cases (a
 long tool-heavy chat where the model forgets a system constraint), scored by the
 `loop-broke` and `drift-resist` columns. The **mechanisms are verified
 deterministically** in `test/loop.test.ts` and `test/reground.test.ts` (the
-nudge / re-assertion is provably injected). The *real-model* numbers on Hermes 3
-(Q4 via Ollama) are small-sample and noisy — loop recovery ranged 33–67% across
-runs (default `nudge`; `action: break` makes it deterministic, no extra model
-call), and the 2 drift cases sat at 50% with and without (Hermes 3 isn't
-drift-prone enough at this depth to need the reminder). These features target
-**weaker models and longer conversations** than Hermes 3; both are additive and
-low-risk, so they never degrade a model that doesn't need them. This is still
-the dimension where foxfence helps small/self-hosted models — single-turn tool
-calling on a capable model gains little.
+nudge / re-assertion is provably injected). *Real-model* numbers are small-sample
+(3 loop / 2 drift cases): on **qwen2.5-7b-instruct** (local) the loop-breaker
+lifts recovery **67% → 100%** with the default `nudge` (`action: break` makes it
+deterministic, no extra model call); the drift cases show no lift because no
+local model tested actually drifts at this depth (qwen2.5 already resists at
+100%). Both transforms are additive and low-risk, so they never degrade a model
+that doesn't need them. This is the dimension where foxfence helps small /
+self-hosted models — single-turn tool calling on a capable model gains little.
+See [`eval/results.md`](./eval/results.md) for the per-model table.
 
 A safety red-team corpus (§11.3 — secret exfiltration, injection-driven
 dangerous tool calls) lives in `test/redteam.test.ts` as non-regression guards:

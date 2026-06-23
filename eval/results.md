@@ -58,21 +58,27 @@ The dimension where foxfence is meant to help small/self-hosted models:
 provably injected at the configured thresholds, with `break`/disable paths.
 That is the real validation.
 
-**Real-model numbers (Hermes 3, Q4 via Ollama) are small-sample and noisy** and
-should be read as directional only:
+**Real-model numbers are small-sample (3 loop / 2 drift cases) — directional:**
 
-| dimension (cases) | direct | foxfence |
+| model (local, Ollama) | loop-broke (3) | drift-resist (2) |
 |---|---|---|
-| loop-broke (3) | 33–67% (varies by run) | 33–67% (`nudge`) / 100% (`break`) |
-| drift-resist (2) | 50% | 50% |
+| **qwen2.5-7b-instruct** | 67% → **100%** (`nudge`) | 100% → 100% (no headroom) |
+| hermes3 (Q4) | 33–67% → 33–67% (noisy) | 50% → 50% |
 
-Hermes 3 is a fairly robust 8B: it often self-recovers from loops and isn't
-drift-prone at 6 tool results, so these small corpora don't show a clean lift on
-it. Both transforms are **additive and low-risk** (they only add a hint /
-re-assert the prompt), so they never degrade a model that doesn't need them, and
-they're expected to matter most on weaker models and longer conversations. The
-loop-breaker's `break` action is the one deterministic guarantee here. Larger
-corpora and weaker-model runs are welcome contributions.
+On **qwen2.5-7b-instruct** the loop-breaker shows a clean lift — it self-recovers
+from 2 of 3 loops, and the `nudge` carries the third to **100%**. The `break`
+action makes it deterministic on any model (the loop stops without another call).
+
+The **drift** cases show no lift on either model — not because re-grounding
+fails to fire (the tests prove it does) but because neither model actually
+drifts on these two cases at 6 tool results (qwen2.5 already resists at 100%,
+so there's nothing to recover). A real-model drift demonstration needs harder /
+longer cases or a genuinely drift-prone model; the mechanism is validated by
+`test/reground.test.ts` meanwhile.
+
+Both transforms are **additive and low-risk** — they only add a hint / re-assert
+the prompt, so they never degrade a model that doesn't need them. Larger corpora
+and weaker-model runs are welcome contributions.
 
 ## What this validates
 
@@ -80,10 +86,10 @@ corpora and weaker-model runs are welcome contributions.
   runtime downgrade + repair loop, and the forced-shim run shows the prompted
   protocol can beat a model's own native tool calling.
 - **It addresses multi-turn failure modes** native APIs leave to you — stuck
-  retry loops (loop-breaker) and forgotten system constraints (re-grounding),
-  verified deterministically by the test suite. The `break` action is a hard,
-  deterministic loop stop; real-model lift depends on the model and corpus size
-  (see the noisy Hermes 3 numbers above).
+  retry loops (loop-breaker, qwen2.5-7b 67→100) and forgotten system constraints
+  (re-grounding), verified deterministically by the test suite. The `break`
+  action is a hard, deterministic loop stop; real-model lift depends on the model
+  and corpus size (small-n; see the table above).
 - **The no-native-tools rescue case** — a model that emits no tool calls at all —
   is shown deterministically by the bundled simulator below (0% → ~86%).
 
