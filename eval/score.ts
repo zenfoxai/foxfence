@@ -10,7 +10,7 @@ import type { EvalCase } from "./corpus.ts";
 export interface CaseScore {
   id: string;
   category: string;
-  expectType: "tool_call" | "no_call";
+  expectType: "tool_call" | "no_call" | "avoid_repeat";
   producedToolCall: boolean;
   correctTool: boolean;
   validArgs: boolean;
@@ -86,6 +86,31 @@ export function scoreCase(c: EvalCase, body: Record<string, unknown>): CaseScore
     return base;
   }
 
+  if (c.expect.type === "avoid_repeat") {
+    // The loop is broken unless the model re-emits the identical forbidden call
+    // (same tool + deep-equal args). A corrected call, a different tool, or a
+    // plain answer all count as recovery.
+    const forbidden = c.expect;
+    const message = (body.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as
+      | Record<string, unknown>
+      | undefined;
+    const calls = Array.isArray(message?.tool_calls) ? (message!.tool_calls as Array<Record<string, unknown>>) : [];
+    const stillLooping = calls.some((call) => {
+      const fn = call.function as Record<string, unknown> | undefined;
+      if (fn?.name !== forbidden.name) return false;
+      let parsed: unknown = null;
+      try {
+        parsed = JSON.parse(typeof fn?.arguments === "string" ? fn.arguments : "{}");
+      } catch {
+        return false; // unparseable args ≠ the exact forbidden call
+      }
+      return deepEqual(parsed, forbidden.args);
+    });
+    base.validCall = !stillLooping;
+    base.exactMatch = base.validCall;
+    return base;
+  }
+
   const expected = c.expect;
   const call = matchingCall(body, expected.name);
   if (!call) return base; // no call produced for a tool_call case → fail
@@ -126,11 +151,14 @@ export interface Aggregate {
   toolExactRate: number;
   noCallCases: number;
   noCallCorrectRate: number;
+  loopCases: number;
+  loopBrokeRate: number;
 }
 
 export function aggregate(scores: CaseScore[]): Aggregate {
   const tool = scores.filter((s) => s.expectType === "tool_call");
   const noCall = scores.filter((s) => s.expectType === "no_call");
+  const loop = scores.filter((s) => s.expectType === "avoid_repeat");
   const rate = (xs: CaseScore[], f: (s: CaseScore) => boolean) =>
     xs.length === 0 ? 0 : xs.filter(f).length / xs.length;
   return {
@@ -142,5 +170,7 @@ export function aggregate(scores: CaseScore[]): Aggregate {
     toolExactRate: rate(tool, (s) => s.exactMatch),
     noCallCases: noCall.length,
     noCallCorrectRate: rate(noCall, (s) => s.validCall),
+    loopCases: loop.length,
+    loopBrokeRate: rate(loop, (s) => s.validCall),
   };
 }

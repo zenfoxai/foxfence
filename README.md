@@ -129,6 +129,39 @@ names from your config.
   surfaced as `foxfence.stream_error` on the final chunk rather than passed off
   as a clean completion.
 
+### Loop-breaker
+
+Small and self-hosted models share a failure mode native APIs don't fix: when a
+tool call fails, the model often re-emits the **identical call** instead of
+adapting, and the agent spins in an infinite retry loop. foxfence detects this
+from the request history alone (it stays stateless — nothing is remembered
+between requests) and steps in.
+
+- **Detection** — when the most recent assistant turns are the same tool call
+  (same name + arguments, compared structurally so key order and whitespace
+  don't hide a repeat) repeated `threshold` times in a row, it's a stuck loop.
+  Healthy traffic never trips this, so it's **on by default**.
+- **`nudge` (default)** — foxfence appends a short corrective system message to
+  the request ("you've already called `X` N times with these arguments and it
+  didn't work — fix the arguments, try a different tool, or stop and explain")
+  and forwards it. The model gets a chance to recover on its own.
+- **`break`** — foxfence stops the loop deterministically *without another model
+  call*, returning a normal assistant completion that explains it broke the
+  retry loop. Use this when you want a hard cap rather than a hint.
+- **Visible** — an intervention sets the `X-Foxfence-Loop` header (`nudge` or
+  `break`) and a `foxfence.loop` field (`{ tool, count, action }`).
+
+```yaml
+models:
+  - expose: my-model
+    upstream: local-ollama
+    model: qwen2.5:7b-instruct
+    loop_breaker:
+      enabled: true       # default true; set false to turn off
+      threshold: 3        # identical repeats before intervening (default 3)
+      action: nudge       # nudge (default) | break
+```
+
 ### Tool-call policy
 
 The safety differentiator (§5.3): a declarative allow/deny policy enforced on
@@ -195,6 +228,15 @@ corpus lives in
 [`eval/cases/`](./eval/cases/) (validated at load: every expected call must
 conform to its tool's JSON Schema); the scorer is in `eval/score.ts`. Run real
 models with `--endpoint` and contribute their tables.
+
+**Loop recovery** — the corpus also includes multi-turn `loop` cases (a tool
+call that keeps failing, the model re-firing it identically). The `loop-broke`
+column scores whether the next turn escapes the loop. On Hermes 3 (Q4 via
+Ollama) the loop-breaker lifted recovery from **33% → 67%** with the default
+`nudge`; `action: break` makes it deterministic (the loop is stopped without
+another model call) at the cost of the model not getting to self-correct. This
+is the dimension where foxfence earns its keep on small/self-hosted models —
+on plain single-turn tool calling a model that's already good gains little.
 
 A safety red-team corpus (§11.3 — secret exfiltration, injection-driven
 dangerous tool calls) lives in `test/redteam.test.ts` as non-regression guards:

@@ -123,7 +123,7 @@ function completion(content: string): Record<string, unknown> {
 
 export function startSimModel(cases: EvalCase[]): SimModel {
   const byUser = cases
-    .map((c) => ({ text: c.messages[0]!.content, case: c }))
+    .map((c) => ({ text: String(c.messages[0]?.content ?? ""), case: c }))
     .sort((a, b) => b.text.length - a.text.length);
   const state = { requests: 0 };
 

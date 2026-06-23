@@ -8,6 +8,7 @@ import { callUpstream, relayResponse, UpstreamError } from "./upstream/client.ts
 import { CapabilityStore, chooseStrategy, type StrategyChoice } from "./shim/probe.ts";
 import { runToolShim } from "./shim/repair.ts";
 import { StreamSanitizer } from "./shim/stream-sanitize.ts";
+import { detectToolCallLoop, loopBreakerNudge, loopBreakResponse } from "./loop.ts";
 
 export interface PipelineOptions {
   detectors: Detector[];
@@ -405,6 +406,7 @@ interface StreamFinalize {
   priorVerdicts: AuditVerdict[];
   maskedSoFar: number;
   shimInfo?: Record<string, unknown>;
+  loopInfo?: Record<string, unknown>;
   onComplete: (info: { verdicts: AuditVerdict[]; masked: number; restored: number; usage?: unknown }) => void;
 }
 
@@ -589,10 +591,11 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
         }
 
         const foxfence =
-          verdicts.length > 0 || fin.shimInfo || streamError
+          verdicts.length > 0 || fin.shimInfo || fin.loopInfo || streamError
             ? {
                 ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
                 ...(fin.shimInfo ? { shim: fin.shimInfo } : {}),
+                ...(fin.loopInfo ? { loop: fin.loopInfo } : {}),
                 ...(streamError ? { stream_error: true } : {}),
               }
             : undefined;
@@ -620,6 +623,7 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
   if (fin.shimInfo && typeof fin.shimInfo.repairs === "number" && (fin.shimInfo.repairs as number) > 0) {
     headers.set("x-foxfence-repairs", String(fin.shimInfo.repairs));
   }
+  if (fin.loopInfo) headers.set("x-foxfence-loop", "nudge");
   return new Response(stream, { status: 200, headers });
 }
 
@@ -635,6 +639,7 @@ export async function handleChatCompletion(
   let masked = 0;
   let restored = 0;
   let shimInfo: Record<string, unknown> | undefined;
+  let loopInfo: Record<string, unknown> | undefined;
 
   const audit = (
     status: number,
@@ -675,6 +680,30 @@ export async function handleChatCompletion(
   if (inbound.blocked) {
     audit(200, true);
     return blockedResponse(ctx, inbound.blocked);
+  }
+
+  // ── Loop-breaker (failure mode: infinite retry loops) ──────────
+  // Stateless: detection reads only the inbound history. "break" short-circuits
+  // with a deterministic completion (no upstream call); "nudge" appends a
+  // corrective system message so the model gets a chance to adapt itself.
+  const lb = route.loop_breaker as
+    | { enabled?: boolean; threshold?: number; action?: "nudge" | "break" }
+    | undefined;
+  if (lb?.enabled !== false) {
+    const detection = detectToolCallLoop(body.messages, lb?.threshold ?? 3);
+    if (detection) {
+      const action = lb?.action ?? "nudge";
+      loopInfo = { tool: detection.tool, count: detection.count, action };
+      if (action === "break") {
+        const broken = loopBreakResponse(route.expose, detection);
+        audit(200, false, { loop: loopInfo });
+        const headers = new Headers({ "x-foxfence-loop": "break" });
+        return ctx.stream ? completionToSSE(broken, headers) : Response.json(broken, { status: 200, headers });
+      }
+      // nudge: mutate the outbound request — every downstream path (native,
+      // shimmed, plain) reads this same body, so the model always sees it.
+      (body.messages as unknown[]).push(loopBreakerNudge(detection));
+    }
   }
 
   // ── Strategy selection (§6.1) ──────────────────────────────────
@@ -729,6 +758,7 @@ export async function handleChatCompletion(
         priorVerdicts: verdicts,
         maskedSoFar: masked,
         shimInfo,
+        loopInfo,
         onComplete: ({ verdicts: v, masked: m, restored: r, usage }) => {
           audit(200, false, {
             verdicts: v,
@@ -827,11 +857,12 @@ export async function handleChatCompletion(
   responseBody.model = route.expose;
   const repairs = typeof shimInfo?.repairs === "number" ? (shimInfo.repairs as number) : 0;
   const policyActive = policy.blocked.length > 0 || policy.flagged.length > 0;
-  if (verdicts.length > 0 || shimInfo || policyActive) {
+  if (verdicts.length > 0 || shimInfo || policyActive || loopInfo) {
     responseBody.foxfence = {
       ...(typeof responseBody.foxfence === "object" ? responseBody.foxfence : {}),
       ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
       ...(shimInfo ? { shim: shimInfo } : {}),
+      ...(loopInfo ? { loop: loopInfo } : {}),
       ...(policyActive
         ? { tool_policy: { blocked: policy.blocked, flagged: policy.flagged } }
         : {}),
@@ -850,6 +881,7 @@ export async function handleChatCompletion(
   const headers = new Headers();
   if (repairs > 0) headers.set("x-foxfence-repairs", String(repairs));
   if (policy.blockedAny) headers.set("x-foxfence-blocked", "true");
+  if (loopInfo) headers.set("x-foxfence-loop", "nudge");
   if (ctx.stream) return completionToSSE(responseBody, headers);
   return Response.json(responseBody, { status: 200, headers });
 }

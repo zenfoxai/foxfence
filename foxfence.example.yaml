@@ -28,6 +28,12 @@ models:
     # repair: { max_attempts: 2 } # bounded repair loop; 0 disables
     # profile: qwen2.5-instruct   # pin capabilities/quirks from the registry, or inline
     # (react = Thought/Action format for tiny models; opt-in only, never auto-selected)
+    # Loop-breaker: catches a model stuck re-emitting the same failed tool call.
+    # On by default; the block below shows the defaults. Sets X-Foxfence-Loop.
+    # loop_breaker:
+    #   enabled: true             # set false to disable
+    #   threshold: 3              # identical repeats in the history before acting
+    #   action: nudge             # nudge (inject a corrective hint) | break (hard stop)
 
 security:
   # What to do when a detector itself fails: block (fail-closed, default) or pass.
