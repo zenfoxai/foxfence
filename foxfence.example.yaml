@@ -9,6 +9,9 @@ listen: 127.0.0.1:4100
 upstreams:
   - name: local-ollama
     base_url: http://localhost:11434/v1
+    # Fail fast instead of hanging if a model stalls (non-streaming calls only;
+    # a long stream is left alone). Omit for no timeout.
+    # timeout_ms: 120000
   # - name: vllm
   #   base_url: http://localhost:8000/v1
   #   constrained: guided_json    # enables the `constrained` strategy

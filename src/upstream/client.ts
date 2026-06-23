@@ -33,16 +33,31 @@ export async function callUpstream(
 
   const headers = new Headers({ "content-type": "application/json" });
   if (upstream.api_key) headers.set("authorization", `Bearer ${upstream.api_key}`);
-  if (body.stream === true) headers.set("accept", "text/event-stream");
+  const streaming = body.stream === true;
+  if (streaming) headers.set("accept", "text/event-stream");
+
+  const init: RequestInit = {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ ...body, model: route.model }),
+  };
+  // Bound non-streaming calls so a hung model fails fast (§ upstream timeout).
+  // Streaming is left unbounded — aborting would kill a legitimately long
+  // stream; only the initial connect is implicitly covered by fetch itself.
+  if (!streaming && typeof upstream.timeout_ms === "number") {
+    init.signal = AbortSignal.timeout(upstream.timeout_ms);
+  }
 
   try {
-    return await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ ...body, model: route.model }),
-    });
+    return await fetch(url, init);
   } catch (e) {
-    throw new UpstreamError(upstream.name, e instanceof Error ? e.message : String(e));
+    const detail =
+      e instanceof Error && e.name === "TimeoutError"
+        ? `timed out after ${upstream.timeout_ms}ms`
+        : e instanceof Error
+          ? e.message
+          : String(e);
+    throw new UpstreamError(upstream.name, detail);
   }
 }
 

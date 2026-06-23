@@ -45,6 +45,9 @@ names from your config.
 - `GET /healthz` — liveness (no auth).
 - Agent-side API keys (`api_keys`), upstream-side key injection (the agent's
   key is never forwarded upstream).
+- Optional upstream `timeout_ms` — a stalled model (e.g. a reasoning model
+  emitting an unbounded thinking trace) fails fast as a clean 502 instead of
+  hanging the request. Non-streaming calls only; a long stream is left alone.
 - Errors in standard OpenAI wire format.
 - Single-binary build: `bun run build` → `dist/foxfence`.
 
