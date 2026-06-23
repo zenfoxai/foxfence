@@ -80,6 +80,11 @@ export function scoreCase(c: EvalCase, body: Record<string, unknown>): CaseScore
     exactMatch: false,
   };
 
+  // A non-response (timeout / HTTP error) is never a pass — fail every expect
+  // type, including the "no tool call" ones where an empty body would otherwise
+  // look like success.
+  if (body.__evalError !== undefined) return base;
+
   if (c.expect.type === "no_call") {
     base.validCall = !base.producedToolCall;
     base.exactMatch = base.validCall;

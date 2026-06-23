@@ -18,18 +18,34 @@ interface RunRow {
   totalRepairs: number;
 }
 
+/** Per-request ceiling. Slow local models (esp. reasoning models that emit long
+ * thinking traces) can hang a single call; without a bound one stuck case
+ * aborts the whole run. A timed-out or errored call degrades to an empty body,
+ * which scores as a failure — the run still completes and the table is honest. */
+const REQUEST_TIMEOUT_MS = Number(process.env.EVAL_TIMEOUT_MS ?? 120000);
+
 async function postChat(
   target: Target,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const headers: Record<string, string> = { "content-type": "application/json" };
   if (target.apiKey) headers.authorization = `Bearer ${target.apiKey}`;
-  const res = await fetch(`${target.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({ ...payload, model: target.model }),
-  });
-  return (await res.json()) as Record<string, unknown>;
+  try {
+    const res = await fetch(`${target.baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...payload, model: target.model }),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!res.ok) {
+      console.warn(`eval: ${target.label} HTTP ${res.status} — scoring as failure`);
+      return { __evalError: `http ${res.status}` };
+    }
+    return (await res.json()) as Record<string, unknown>;
+  } catch (e) {
+    console.warn(`eval: ${target.label} request failed (${e instanceof Error ? e.message : String(e)}) — scoring as failure`);
+    return { __evalError: e instanceof Error ? e.message : String(e) };
+  }
 }
 
 async function runTarget(target: Target, cases: EvalCase[]): Promise<{ scores: CaseScore[]; repairs: number }> {
