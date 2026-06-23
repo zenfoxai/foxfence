@@ -1,0 +1,14 @@
+# Mistral Small 3.x Instruct — native (OpenAI-style) tool calling and a normal
+# system role; 128K context. Verified against mistralai/mistral-small-3.2-24b-
+# instruct via OpenRouter (returns native `tool_calls`). Declaring native here
+# lets you skip the probe in prod (deterministic) without a runtime downgrade.
+# Mistral Small 3.1 shares the architecture, context window, and tool-calling
+# behavior; 3.2 is the build actually measured.
+- id: mistral-small-3.2
+  capabilities:
+    toolCalling: native
+  contextWindow: 131072
+- id: mistral-small-3.1
+  capabilities:
+    toolCalling: native
+  contextWindow: 131072

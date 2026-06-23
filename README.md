@@ -183,11 +183,12 @@ bun run eval --endpoint <url> --model <name> --key <key>  # a real model
 bun run eval --endpoint <url> --model <name> --shim json-prompted  # force the shim
 ```
 
-**Real-model results** ([`eval/results.md`](./eval/results.md), via OpenRouter +
-Fireworks): foxfence improved native models (Qwen2.5-7B 83→90%, Llama-3.1-8B
-86→100%) through its runtime downgrade + repair loop, and was **transparent on
-frontier models** (GPT-4o, Kimi K2.6, GLM-5.2, gpt-oss-120b all 100→100% with
-zero repairs — it never degrades a model that already works). Forcing the
+**Real-model results** ([`eval/results.md`](./eval/results.md), via OpenRouter,
+Fireworks + Cohere): foxfence improved native models (Qwen2.5-7B 83→90%,
+Llama-3.1-8B 86→100%) through its runtime downgrade + repair loop, and was
+**transparent on capable models** (GPT-4o, Kimi K2.6, GLM-5.2, gpt-oss-120b,
+Mistral Small 3.2, and Cohere Command A — native passthrough at parity with
+direct, zero repairs; it never degrades a model that already works). Forcing the
 prompted shim even matched or beat a model's own native path. The no-native-tools
 rescue case is shown deterministically by the bundled simulator (0→~86%). The
 corpus lives in

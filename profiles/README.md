@@ -44,6 +44,7 @@ Precedence when selecting a strategy: an explicit route `shim:` wins, then
 |---|---|
 | `qwen2.5-instruct` | native tool calling (verified via OpenRouter) |
 | `llama-3.1-instruct`, `llama-3.3-instruct` | native tool calling (3.1 verified via OpenRouter) |
+| `mistral-small-3.2`, `mistral-small-3.1` | native tool calling, 128K context (3.2 verified via OpenRouter) |
 | `command-a-plus`, `command-a` | Cohere Command A — 256K context; native tool calling per Cohere's docs, but left on `shim: auto` because some proxy routings don't expose tool use for it |
 | `gemma-2`, `gemma-3` | `no-system-role` chat-template quirk |
 
