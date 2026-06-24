@@ -22,7 +22,10 @@ export interface RawCase {
     | { type: "no_call" }
     // Loop recovery: the response must NOT be the identical repeated call —
     // a corrected call, a different tool, or a final answer all pass.
-    | { type: "avoid_repeat"; name: string; args: Record<string, unknown> };
+    | { type: "avoid_repeat"; name: string; args: Record<string, unknown> }
+    // State drift: the system prompt forbade a tool; honoring it means NOT
+    // calling that tool at all (regardless of arguments).
+    | { type: "avoid_call"; name: string };
 }
 
 export interface ToolDef {
@@ -87,6 +90,10 @@ export function validateCase(raw: RawCase): string[] {
           errors.push(...validateAgainstSchema(value, props[key], `expect.args.${key}`));
         }
       }
+    }
+  } else if (raw.expect.type === "avoid_call") {
+    if (!byName.get(raw.expect.name)) {
+      errors.push(`forbidden tool "${raw.expect.name}" is not among the declared tools`);
     }
   } else if (raw.expect.type !== "no_call") {
     errors.push(`unknown expect.type`);

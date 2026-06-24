@@ -31,12 +31,22 @@ models:
     jsonMode: none           # native | prompted | none
   pinStrategy: json-prompted # optional — native | json-prompted | constrained
   contextWindow: 32768       # optional
-  chatTemplateQuirks:        # optional; acted on: "no-system-role"
+  chatTemplateQuirks:        # optional template-hygiene quirks (see below)
     - no-system-role
 ```
 
 Precedence when selecting a strategy: an explicit route `shim:` wins, then
 `pinStrategy`, then declared `capabilities`, then the probe.
+
+**`chatTemplateQuirks`** are acted on for both the shimmed strategies and the
+native / passthrough path (where foxfence would otherwise forward messages
+untouched). Supported quirks:
+
+| quirk | effect |
+|---|---|
+| `no-system-role` | fold every system message into the first user turn |
+| `no-tool-role` | rewrite `tool` result messages as user turns |
+| `merge-consecutive` | coalesce adjacent same-role turns (tool-call turns preserved) |
 
 ## Bundled profiles
 

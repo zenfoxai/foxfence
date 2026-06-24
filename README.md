@@ -45,6 +45,9 @@ names from your config.
 - `GET /healthz` — liveness (no auth).
 - Agent-side API keys (`api_keys`), upstream-side key injection (the agent's
   key is never forwarded upstream).
+- Optional upstream `timeout_ms` — a stalled model (e.g. a reasoning model
+  emitting an unbounded thinking trace) fails fast as a clean 502 instead of
+  hanging the request. Non-streaming calls only; a long stream is left alone.
 - Errors in standard OpenAI wire format.
 - Single-binary build: `bun run build` → `dist/foxfence`.
 
@@ -162,6 +165,64 @@ models:
       action: nudge       # nudge (default) | break
 ```
 
+### Re-grounding (state drift)
+
+The companion failure mode: over a long, tool-heavy conversation, small models
+drift off-distribution and start **ignoring their original system
+instructions** (the constraint that said "read-only", "answer in French",
+"never call X"). foxfence counters this statelessly — again reading only the
+request — by re-asserting the system prompt where the model will actually weigh
+it.
+
+- **Detection** — once the history carries `after_tool_results` tool results
+  (default 6) *and* there is a system message, the conversation is considered
+  drift-prone. On by default.
+- **Re-assertion** — foxfence appends a compact reminder near the end of the
+  request ("your original instructions are still in effect: …"), carrying the
+  original system text truncated to `max_chars` (default 600) so a long prompt
+  can't blow the token budget. It is **additive** — existing turns are never
+  dropped or rewritten.
+- **Visible** — sets the `X-Foxfence-Reground` header and a `foxfence.reground`
+  field (`{ tool_results }`).
+
+```yaml
+models:
+  - expose: my-model
+    upstream: local-ollama
+    model: qwen2.5:7b-instruct
+    reground:
+      enabled: true            # default true; set false to turn off
+      after_tool_results: 6    # tool results before re-asserting (default 6)
+      max_chars: 600           # truncate the re-asserted prompt (default 600)
+```
+
+### Template hygiene (chat-template sensitivity)
+
+Small models are picky about their chat template: many reject a `system` role,
+reject the `tool` role, or break on consecutive same-role turns — and when the
+template is violated, output quality collapses. The `json-prompted` shim already
+reshapes history for the models it drives; this covers the **native / passthrough
+path**, where foxfence otherwise forwards messages untouched.
+
+Declare the quirk on the model's [profile](./profiles/) and foxfence reshapes
+the outbound request (only on the native/plain path; pure and additive):
+
+- **`no-system-role`** — folds every system message into the first user turn
+  (e.g. Gemma). Applied last, so an injected loop / re-grounding note is folded
+  in too.
+- **`no-tool-role`** — rewrites `tool` result messages as user turns.
+- **`merge-consecutive`** — coalesces adjacent same-role turns for
+  strict-alternation templates (tool-call turns are preserved, never merged away).
+
+```yaml
+# profiles/my-model.yaml
+- id: my-model
+  capabilities: { toolCalling: native }
+  chatTemplateQuirks: [no-system-role, merge-consecutive]
+```
+
+When applied it sets the `X-Foxfence-Template` header and `foxfence.template`.
+
 ### Tool-call policy
 
 The safety differentiator (§5.3): a declarative allow/deny policy enforced on
@@ -227,14 +288,20 @@ in [`eval/cases/`](./eval/cases/) (validated at load: every expected call must
 conform to its tool's JSON Schema); the scorer is in `eval/score.ts`. Run real
 models with `--endpoint` and contribute their tables.
 
-**Loop recovery** — the corpus also includes multi-turn `loop` cases (a tool
-call that keeps failing, the model re-firing it identically). The `loop-broke`
-column scores whether the next turn escapes the loop. On Hermes 3 (Q4 via
-Ollama) the loop-breaker lifted recovery from **33% → 67%** with the default
-`nudge`; `action: break` makes it deterministic (the loop is stopped without
-another model call) at the cost of the model not getting to self-correct. This
-is the dimension where foxfence earns its keep on small/self-hosted models —
-on plain single-turn tool calling a model that's already good gains little.
+**Multi-turn reliability (loop + drift)** — the corpus also includes `loop`
+cases (a failing tool call the model re-fires identically) and `drift` cases (a
+long tool-heavy chat where the model forgets a system constraint), scored by the
+`loop-broke` and `drift-resist` columns. The **mechanisms are verified
+deterministically** in `test/loop.test.ts` and `test/reground.test.ts` (the
+nudge / re-assertion is provably injected). *Real-model* numbers are small-sample
+(3 loop / 2 drift cases): on **qwen2.5-7b-instruct** (local) the loop-breaker
+lifts recovery **67% → 100%** with the default `nudge` (`action: break` makes it
+deterministic, no extra model call); the drift cases show no lift because no
+local model tested actually drifts at this depth (qwen2.5 already resists at
+100%). Both transforms are additive and low-risk, so they never degrade a model
+that doesn't need them. This is the dimension where foxfence helps small /
+self-hosted models — single-turn tool calling on a capable model gains little.
+See [`eval/results.md`](./eval/results.md) for the per-model table.
 
 A safety red-team corpus (§11.3 — secret exfiltration, injection-driven
 dangerous tool calls) lives in `test/redteam.test.ts` as non-regression guards:

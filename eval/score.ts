@@ -10,7 +10,7 @@ import type { EvalCase } from "./corpus.ts";
 export interface CaseScore {
   id: string;
   category: string;
-  expectType: "tool_call" | "no_call" | "avoid_repeat";
+  expectType: "tool_call" | "no_call" | "avoid_repeat" | "avoid_call";
   producedToolCall: boolean;
   correctTool: boolean;
   validArgs: boolean;
@@ -80,6 +80,11 @@ export function scoreCase(c: EvalCase, body: Record<string, unknown>): CaseScore
     exactMatch: false,
   };
 
+  // A non-response (timeout / HTTP error) is never a pass — fail every expect
+  // type, including the "no tool call" ones where an empty body would otherwise
+  // look like success.
+  if (body.__evalError !== undefined) return base;
+
   if (c.expect.type === "no_call") {
     base.validCall = !base.producedToolCall;
     base.exactMatch = base.validCall;
@@ -107,6 +112,21 @@ export function scoreCase(c: EvalCase, body: Record<string, unknown>): CaseScore
       return deepEqual(parsed, forbidden.args);
     });
     base.validCall = !stillLooping;
+    base.exactMatch = base.validCall;
+    return base;
+  }
+
+  if (c.expect.type === "avoid_call") {
+    // Drift is resisted unless the model calls the forbidden tool at all.
+    const forbidden = c.expect.name;
+    const message = (body.choices as Array<Record<string, unknown>> | undefined)?.[0]?.message as
+      | Record<string, unknown>
+      | undefined;
+    const calls = Array.isArray(message?.tool_calls) ? (message!.tool_calls as Array<Record<string, unknown>>) : [];
+    const calledForbidden = calls.some(
+      (call) => (call.function as Record<string, unknown> | undefined)?.name === forbidden,
+    );
+    base.validCall = !calledForbidden;
     base.exactMatch = base.validCall;
     return base;
   }
@@ -153,12 +173,15 @@ export interface Aggregate {
   noCallCorrectRate: number;
   loopCases: number;
   loopBrokeRate: number;
+  driftCases: number;
+  driftResistRate: number;
 }
 
 export function aggregate(scores: CaseScore[]): Aggregate {
   const tool = scores.filter((s) => s.expectType === "tool_call");
   const noCall = scores.filter((s) => s.expectType === "no_call");
   const loop = scores.filter((s) => s.expectType === "avoid_repeat");
+  const drift = scores.filter((s) => s.expectType === "avoid_call");
   const rate = (xs: CaseScore[], f: (s: CaseScore) => boolean) =>
     xs.length === 0 ? 0 : xs.filter(f).length / xs.length;
   return {
@@ -172,5 +195,7 @@ export function aggregate(scores: CaseScore[]): Aggregate {
     noCallCorrectRate: rate(noCall, (s) => s.validCall),
     loopCases: loop.length,
     loopBrokeRate: rate(loop, (s) => s.validCall),
+    driftCases: drift.length,
+    driftResistRate: rate(drift, (s) => s.validCall),
   };
 }

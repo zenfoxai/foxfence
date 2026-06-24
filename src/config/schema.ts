@@ -4,6 +4,12 @@ export const UpstreamSchema = z.object({
   name: z.string().min(1),
   base_url: z.url(),
   api_key: z.string().optional(),
+  // Per-request ceiling for NON-streaming upstream calls (ms). A model that
+  // hangs (e.g. a reasoning model emitting an unbounded thinking trace) then
+  // fails fast as a clean 502 instead of blocking the request forever. Opt-in
+  // (omit = no timeout); streaming responses are not time-bounded — a long
+  // stream is legitimate.
+  timeout_ms: z.number().int().positive().max(600000).optional(),
   // The server's constrained-decoding mechanism (§6.2), if any. Enables the
   // `constrained` strategy: response_format = OpenAI/vLLM json_schema,
   // guided_json = vLLM's extra body field.
@@ -47,6 +53,16 @@ export const ModelRouteSchema = z.looseObject({
       enabled: z.boolean().default(true),
       threshold: z.number().int().min(2).max(50).default(3),
       action: z.enum(["nudge", "break"]).default("nudge"),
+    })
+    .optional(),
+  // Re-grounding (mode: state drift). Default on — once a conversation has
+  // accumulated `after_tool_results` tool results, foxfence re-asserts the
+  // original system prompt near the end of the request. Additive only.
+  reground: z
+    .looseObject({
+      enabled: z.boolean().default(true),
+      after_tool_results: z.number().int().min(1).max(200).default(6),
+      max_chars: z.number().int().min(50).max(8000).default(600),
     })
     .optional(),
   // Registry id (string) or an inline profile object.
