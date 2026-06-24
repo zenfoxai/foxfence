@@ -10,6 +10,7 @@ import { runToolShim } from "./shim/repair.ts";
 import { StreamSanitizer } from "./shim/stream-sanitize.ts";
 import { detectToolCallLoop, loopBreakerNudge, loopBreakResponse } from "./loop.ts";
 import { detectStateDrift, regroundReminder } from "./reground.ts";
+import { applyTemplateQuirks, appliedQuirks } from "./template.ts";
 
 export interface PipelineOptions {
   detectors: Detector[];
@@ -409,6 +410,7 @@ interface StreamFinalize {
   shimInfo?: Record<string, unknown>;
   loopInfo?: Record<string, unknown>;
   regroundInfo?: Record<string, unknown>;
+  templateInfo?: Record<string, unknown>;
   onComplete: (info: { verdicts: AuditVerdict[]; masked: number; restored: number; usage?: unknown }) => void;
 }
 
@@ -593,12 +595,13 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
         }
 
         const foxfence =
-          verdicts.length > 0 || fin.shimInfo || fin.loopInfo || fin.regroundInfo || streamError
+          verdicts.length > 0 || fin.shimInfo || fin.loopInfo || fin.regroundInfo || fin.templateInfo || streamError
             ? {
                 ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
                 ...(fin.shimInfo ? { shim: fin.shimInfo } : {}),
                 ...(fin.loopInfo ? { loop: fin.loopInfo } : {}),
                 ...(fin.regroundInfo ? { reground: fin.regroundInfo } : {}),
+                ...(fin.templateInfo ? { template: fin.templateInfo } : {}),
                 ...(streamError ? { stream_error: true } : {}),
               }
             : undefined;
@@ -628,6 +631,7 @@ function streamUpstream(upstreamResponse: Response, fin: StreamFinalize): Respon
   }
   if (fin.loopInfo) headers.set("x-foxfence-loop", "nudge");
   if (fin.regroundInfo) headers.set("x-foxfence-reground", "true");
+  if (fin.templateInfo) headers.set("x-foxfence-template", (fin.templateInfo.quirks as string[]).join(","));
   return new Response(stream, { status: 200, headers });
 }
 
@@ -645,6 +649,7 @@ export async function handleChatCompletion(
   let shimInfo: Record<string, unknown> | undefined;
   let loopInfo: Record<string, unknown> | undefined;
   let regroundInfo: Record<string, unknown> | undefined;
+  let templateInfo: Record<string, unknown> | undefined;
 
   const audit = (
     status: number,
@@ -743,6 +748,25 @@ export async function handleChatCompletion(
     shimInfo = { strategy: choice.strategy.name, source: choice.capabilities?.source };
   }
 
+  // ── Template hygiene (failure mode: chat-template sensitivity) ──
+  // Only on the raw-passthrough paths (native strategy or no-tools plain call):
+  // the shimmed strategies reshape history themselves. Driven by the profile's
+  // declared quirks, applied last so injected loop/reground turns are normalized
+  // too (e.g. folded out of the system role for a no-system-role model).
+  const rawPassthrough = choice === null || choice.strategy.name === "native";
+  const profile = route.profile;
+  const quirks =
+    profile !== null && typeof profile === "object" && Array.isArray((profile as Record<string, unknown>).chatTemplateQuirks)
+      ? ((profile as Record<string, unknown>).chatTemplateQuirks as string[])
+      : [];
+  if (rawPassthrough && Array.isArray(body.messages)) {
+    const applied = appliedQuirks(quirks);
+    if (applied.length > 0) {
+      body.messages = applyTemplateQuirks(body.messages as Record<string, unknown>[], applied);
+      templateInfo = { quirks: applied };
+    }
+  }
+
   // ── Upstream ───────────────────────────────────────────────────
   // Native and tool-free streams go out token-by-token through the sanitizer
   // (mask-restore + secret redaction, tool calls validated/policy-checked).
@@ -780,6 +804,7 @@ export async function handleChatCompletion(
         shimInfo,
         loopInfo,
         regroundInfo,
+        templateInfo,
         onComplete: ({ verdicts: v, masked: m, restored: r, usage }) => {
           audit(200, false, {
             verdicts: v,
@@ -878,13 +903,14 @@ export async function handleChatCompletion(
   responseBody.model = route.expose;
   const repairs = typeof shimInfo?.repairs === "number" ? (shimInfo.repairs as number) : 0;
   const policyActive = policy.blocked.length > 0 || policy.flagged.length > 0;
-  if (verdicts.length > 0 || shimInfo || policyActive || loopInfo || regroundInfo) {
+  if (verdicts.length > 0 || shimInfo || policyActive || loopInfo || regroundInfo || templateInfo) {
     responseBody.foxfence = {
       ...(typeof responseBody.foxfence === "object" ? responseBody.foxfence : {}),
       ...(verdicts.length > 0 ? { verdicts, masked, restored } : {}),
       ...(shimInfo ? { shim: shimInfo } : {}),
       ...(loopInfo ? { loop: loopInfo } : {}),
       ...(regroundInfo ? { reground: regroundInfo } : {}),
+      ...(templateInfo ? { template: templateInfo } : {}),
       ...(policyActive
         ? { tool_policy: { blocked: policy.blocked, flagged: policy.flagged } }
         : {}),
@@ -905,6 +931,7 @@ export async function handleChatCompletion(
   if (policy.blockedAny) headers.set("x-foxfence-blocked", "true");
   if (loopInfo) headers.set("x-foxfence-loop", "nudge");
   if (regroundInfo) headers.set("x-foxfence-reground", "true");
+  if (templateInfo) headers.set("x-foxfence-template", (templateInfo.quirks as string[]).join(","));
   if (ctx.stream) return completionToSSE(responseBody, headers);
   return Response.json(responseBody, { status: 200, headers });
 }

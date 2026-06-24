@@ -196,6 +196,33 @@ models:
       max_chars: 600           # truncate the re-asserted prompt (default 600)
 ```
 
+### Template hygiene (chat-template sensitivity)
+
+Small models are picky about their chat template: many reject a `system` role,
+reject the `tool` role, or break on consecutive same-role turns — and when the
+template is violated, output quality collapses. The `json-prompted` shim already
+reshapes history for the models it drives; this covers the **native / passthrough
+path**, where foxfence otherwise forwards messages untouched.
+
+Declare the quirk on the model's [profile](./profiles/) and foxfence reshapes
+the outbound request (only on the native/plain path; pure and additive):
+
+- **`no-system-role`** — folds every system message into the first user turn
+  (e.g. Gemma). Applied last, so an injected loop / re-grounding note is folded
+  in too.
+- **`no-tool-role`** — rewrites `tool` result messages as user turns.
+- **`merge-consecutive`** — coalesces adjacent same-role turns for
+  strict-alternation templates (tool-call turns are preserved, never merged away).
+
+```yaml
+# profiles/my-model.yaml
+- id: my-model
+  capabilities: { toolCalling: native }
+  chatTemplateQuirks: [no-system-role, merge-consecutive]
+```
+
+When applied it sets the `X-Foxfence-Template` header and `foxfence.template`.
+
 ### Tool-call policy
 
 The safety differentiator (§5.3): a declarative allow/deny policy enforced on
