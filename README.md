@@ -1,22 +1,29 @@
 # foxfence
 
 Model reliability & safety module for agents. An OpenAI-compatible proxy that
-sits between any agent and any model, making cheap models more capable
-(tool-calling shim) and safer (inline detectors). See
+sits between any agent and any model, making cheap / self-hosted models more
+**capable** (tool-calling shim), more **reliable** (loop-breaker, re-grounding,
+template hygiene), and **safer** (inline detectors + tool-call policy). See
 [SPEC-architecture.md](./SPEC-architecture.md) for the full design.
 
 Feature-complete and validated against real models. foxfence speaks the Chat
 Completions and Responses APIs, ships all four shim strategies, the full safety
 pipeline, incremental streaming, Prometheus metrics, model profiles, and signed
 multi-platform binaries. The OpenAI SDK works unmodified against it, streaming
-included. Requests and responses flow through
-inline safety detectors (with optional external classifiers), tool calling
-works even for models with no native support (`native` / `json-prompted` /
-`constrained` / `react` strategies + a bounded repair loop), a declarative
-policy is enforced on the parsed tool calls, native and tool-free responses
-stream token-by-token with full safety, model profiles pin
-capabilities/quirks, and a reproducible eval harness measures the tool-calling
-improvement. A reference OpenClaw + Ollama integration ships in
+included. Requests and responses flow through inline safety detectors (with
+optional external classifiers); tool calling works even for models with no
+native support (`native` / `json-prompted` / `constrained` / `react` strategies
++ a bounded repair loop); a declarative policy is enforced on the parsed tool
+calls; native and tool-free responses stream token-by-token with full safety;
+and model profiles pin capabilities/quirks.
+
+A set of **stateless reliability transforms** target the ways small /
+self-hosted models fail over a session — re-firing a failed tool call
+(**loop-breaker**), drifting off the system prompt across long tool-heavy chats
+(**re-grounding**), choking on a strict chat template (**template hygiene**),
+and hanging on a stalled response (optional upstream **`timeout_ms`**). A
+reproducible eval harness measures the tool-calling and loop-recovery
+improvement, and a reference OpenClaw + Ollama integration ships in
 [`examples/`](./examples/).
 
 ## Quick start
