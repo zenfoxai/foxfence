@@ -49,30 +49,32 @@ The dimension where foxfence is meant to help small/self-hosted models:
 
 - **`loop` cases** ([`cases/loop.json`](./cases/loop.json)) — a tool call that
   keeps failing while the model re-fires it identically. Scored by `loop-broke`.
-- **`drift` cases** ([`cases/drift.json`](./cases/drift.json)) — a long
-  tool-heavy chat where a system constraint ("never call X") gets forgotten.
-  Scored by `drift-resist`.
+- **`drift` cases** ([`cases/drift.json`](./cases/drift.json)) — a tool-heavy
+  chat (up to ~10 tool results) where a system constraint ("never call X") could
+  get forgotten. Scored by `drift-resist`.
 
 **The mechanisms are verified deterministically** in `test/loop.test.ts` and
 `test/reground.test.ts` — the loop nudge and the re-grounding reminder are
 provably injected at the configured thresholds, with `break`/disable paths.
 That is the real validation.
 
-**Real-model numbers are small-sample (3 loop / 2 drift cases) — directional:**
+**Real-model numbers are small-sample (3 loop / 4 drift cases) — directional:**
 
-| model (local, Ollama) | loop-broke (3) | drift-resist (2) |
+| model (local, Ollama) | loop-broke (3) | drift-resist (4) |
 |---|---|---|
-| **qwen2.5-7b-instruct** | 67% → **100%** (`nudge`) | 100% → 100% (no headroom) |
+| **qwen2.5-7b-instruct** | 67–100% → **100%** (`nudge`) | 100% → 100% (no headroom) |
 | hermes3 (Q4) | 33–67% → 33–67% (noisy) | 50% → 50% |
 
-On **qwen2.5-7b-instruct** the loop-breaker shows a clean lift — it self-recovers
-from 2 of 3 loops, and the `nudge` carries the third to **100%**. The `break`
-action makes it deterministic on any model (the loop stops without another call).
+On **qwen2.5-7b-instruct** the loop-breaker shows a clean lift in the run where
+it didn't self-recover (67→100 with `nudge`); on a later run it self-recovered
+all 3 (100→100) — small-n noise. The `break` action makes it deterministic on
+any model (the loop stops without another call).
 
-The **drift** cases show no lift on either model — not because re-grounding
-fails to fire (the tests prove it does) but because neither model actually
-drifts on these two cases at 6 tool results (qwen2.5 already resists at 100%,
-so there's nothing to recover). A real-model drift demonstration needs harder /
+The **drift** cases show no lift — not because re-grounding fails to fire (the
+tests prove it does) but because no available model actually drifts: qwen2.5
+resists at **100% even with ~10 tool results and a strongly tempting final
+request**, so there's nothing to recover. A real-model drift demonstration needs
+harder /
 longer cases or a genuinely drift-prone model; the mechanism is validated by
 `test/reground.test.ts` meanwhile.
 
@@ -92,6 +94,11 @@ and weaker-model runs are welcome contributions.
   and corpus size (small-n; see the table above).
 - **The no-native-tools rescue case** — a model that emits no tool calls at all —
   is shown deterministically by the bundled simulator below (0% → ~86%).
+- **Template hygiene** (chat-template sensitivity) is profile-driven and applies
+  on the native passthrough path (fold `no-system-role`, `no-tool-role`,
+  `merge-consecutive`). It's verified by `test/template.test.ts` rather than the
+  eval — demonstrating it needs a model that actually breaks on a bad template,
+  which the eval corpus can't synthesize portably.
 
 **Caveat:** numbers are at provider-default temperature, so `direct` and
 `foxfence` are independent samples — small wobble between them is sampling noise,
